@@ -5,6 +5,13 @@ export class CreateProductsTable1743456000000 implements MigrationInterface {
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
+      DROP TABLE IF EXISTS "product" CASCADE
+    `);
+    await queryRunner.query(`
+      DROP TABLE IF EXISTS "products" CASCADE
+    `);
+
+    await queryRunner.query(`
       CREATE TABLE "products" (
         "id" uuid NOT NULL DEFAULT gen_random_uuid(),
         "code" character varying(30) NOT NULL,
@@ -56,25 +63,25 @@ export class CreateProductsTable1743456000000 implements MigrationInterface {
 
   public async down(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      DROP INDEX "public"."products_company_category_idx"
+      DROP INDEX IF EXISTS "public"."products_company_category_idx"
     `);
     await queryRunner.query(`
-      DROP INDEX "public"."products_unit_id_idx"
+      DROP INDEX IF EXISTS "public"."products_unit_id_idx"
     `);
     await queryRunner.query(`
-      DROP INDEX "public"."products_category_id_idx"
+      DROP INDEX IF EXISTS "public"."products_category_id_idx"
     `);
     await queryRunner.query(`
-      DROP INDEX "public"."products_company_id_idx"
+      DROP INDEX IF EXISTS "public"."products_company_id_idx"
     `);
     await queryRunner.query(`
-      DROP INDEX "public"."products_is_active_idx"
+      DROP INDEX IF EXISTS "public"."products_is_active_idx"
     `);
     await queryRunner.query(`
-      DROP INDEX "public"."products_name_idx"
+      DROP INDEX IF EXISTS "public"."products_name_idx"
     `);
     await queryRunner.query(`
-      DROP TABLE "products"
+      DROP TABLE IF EXISTS "products"
     `);
   }
 }

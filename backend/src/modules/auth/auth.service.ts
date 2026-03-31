@@ -24,8 +24,8 @@ export class AuthService {
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.role', 'role')
       .addSelect('user.passwordHash')
-      .where('LOWER(user.username) = LOWER(:username)', {
-        username: loginDto.username,
+      .where('LOWER(user.email) = LOWER(:email)', {
+        email: loginDto.email,
       })
       .getOne();
 
@@ -57,6 +57,7 @@ export class AuthService {
       user: {
         id: user.id,
         username: user.username,
+        email: user.email,
         role: user.role.name,
       },
     };

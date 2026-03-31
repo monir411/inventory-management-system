@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsEmail,
   IsOptional,
   IsString,
   IsUUID,
@@ -13,8 +14,12 @@ export class CreateUserDto {
   @MaxLength(50)
   username!: string;
 
+  @IsEmail()
+  @MaxLength(120)
+  email!: string;
+
   @IsString()
-  @MinLength(6)
+  @MinLength(5)
   @MaxLength(100)
   password!: string;
 

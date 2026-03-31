@@ -7,6 +7,7 @@ export type LoginResponseDto = {
   user: {
     id: string;
     username: string;
+    email: string;
     role: RoleName;
   };
 };

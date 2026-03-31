@@ -21,8 +21,11 @@ export function AppHeader() {
         <div>
           <p className="text-sm font-medium text-[var(--primary)]">Dealer ERP</p>
           <h1 className="text-xl font-semibold tracking-tight text-[var(--text)]">
-            Simple, fast business control
+            সহজ, দ্রুত ব্যবসা নিয়ন্ত্রণ
           </h1>
+          <p className="mt-1 text-sm text-[var(--muted)]">
+            কম ক্লিকেই business summary দেখা যাবে
+          </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
           <div className="text-right text-sm">
@@ -34,7 +37,7 @@ export function AppHeader() {
             onClick={handleLogout}
             className="rounded-full bg-white px-4 py-2 text-sm font-medium text-[var(--text)] shadow-sm"
           >
-            Logout
+            Log out
           </button>
         </div>
       </div>

@@ -6,7 +6,7 @@ export function AppSidebar() {
     <aside className="shell-card hidden w-64 shrink-0 rounded-3xl p-4 lg:block">
       <div className="mb-6">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--accent)]">
-          Navigation
+          Quick Menu
         </p>
       </div>
       <nav className="space-y-2">
@@ -21,7 +21,7 @@ export function AppSidebar() {
         ))}
       </nav>
       <div className="mt-8 rounded-2xl bg-[var(--primary-soft)] px-4 py-4 text-sm text-[var(--text)]">
-        Route-wise sales, collections, and stock summaries will fit naturally into this shell.
+        Route-wise sales, collections, stock, and payable workflow in one simple menu.
       </div>
     </aside>
   );

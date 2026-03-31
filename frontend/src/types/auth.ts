@@ -1,6 +1,7 @@
 export type AuthUser = {
   id: string;
   username: string;
+  email: string;
   role: string;
 };
 
@@ -12,6 +13,6 @@ export type AuthSession = {
 };
 
 export type LoginInput = {
-  username: string;
+  email: string;
   password: string;
 };

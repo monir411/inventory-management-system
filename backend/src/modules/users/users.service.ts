@@ -23,21 +23,17 @@ export class UsersService {
   ) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existingUser = await this.usersRepository.findOne({
-      where: {
-        username: createUserDto.username.toLowerCase(),
-      },
-    });
-
-    if (existingUser) {
-      throw new ConflictException('Username already exists');
-    }
+    await this.ensureUniqueUserFields(
+      createUserDto.username.toLowerCase(),
+      createUserDto.email.toLowerCase(),
+    );
 
     const role = await this.findRoleOrFail(createUserDto.roleId);
     const passwordHash = await bcrypt.hash(createUserDto.password, 12);
 
     const user = this.usersRepository.create({
       username: createUserDto.username.toLowerCase(),
+      email: createUserDto.email.toLowerCase(),
       passwordHash,
       role,
       isActive: createUserDto.isActive ?? true,
@@ -91,15 +87,22 @@ export class UsersService {
       updateUserDto.username &&
       updateUserDto.username.toLowerCase() !== user.username
     ) {
-      const existingUser = await this.usersRepository.findOne({
-        where: {
-          username: updateUserDto.username.toLowerCase(),
-        },
-      });
+      await this.ensureUniqueUserFields(
+        updateUserDto.username.toLowerCase(),
+        updateUserDto.email?.toLowerCase(),
+        user.id,
+      );
+    }
 
-      if (existingUser) {
-        throw new ConflictException('Username already exists');
-      }
+    if (
+      updateUserDto.email &&
+      updateUserDto.email.toLowerCase() !== user.email
+    ) {
+      await this.ensureUniqueUserFields(
+        updateUserDto.username?.toLowerCase(),
+        updateUserDto.email.toLowerCase(),
+        user.id,
+      );
     }
 
     if (updateUserDto.roleId) {
@@ -111,6 +114,7 @@ export class UsersService {
     }
 
     user.username = updateUserDto.username?.toLowerCase() ?? user.username;
+    user.email = updateUserDto.email?.toLowerCase() ?? user.email;
     user.isActive = updateUserDto.isActive ?? user.isActive;
 
     const updatedUser = await this.usersRepository.save(user);
@@ -138,5 +142,38 @@ export class UsersService {
     }
 
     return role;
+  }
+
+  private async ensureUniqueUserFields(
+    username?: string,
+    email?: string,
+    excludeUserId?: string,
+  ): Promise<void> {
+    if (username) {
+      const existingUsernameUser = await this.usersRepository.findOne({
+        where: {
+          username,
+        },
+      });
+
+      if (
+        existingUsernameUser &&
+        existingUsernameUser.id !== excludeUserId
+      ) {
+        throw new ConflictException('Username already exists');
+      }
+    }
+
+    if (email) {
+      const existingEmailUser = await this.usersRepository.findOne({
+        where: {
+          email,
+        },
+      });
+
+      if (existingEmailUser && existingEmailUser.id !== excludeUserId) {
+        throw new ConflictException('Email already exists');
+      }
+    }
   }
 }

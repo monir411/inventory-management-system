@@ -10,6 +10,10 @@ async function bootstrap(): Promise<void> {
   const apiPrefix = configService.getOrThrow<string>('apiPrefix');
   const port = configService.getOrThrow<number>('port');
 
+  app.enableCors({
+    origin: true,
+  });
+
   app.setGlobalPrefix(apiPrefix);
   app.useGlobalPipes(
     new ValidationPipe({

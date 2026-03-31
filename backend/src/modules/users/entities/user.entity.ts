@@ -20,6 +20,10 @@ export class User {
   @Column({ type: 'varchar', length: 50 })
   username!: string;
 
+  @Index('users_email_unique', { unique: true })
+  @Column({ type: 'varchar', length: 120 })
+  email!: string;
+
   @Column({ name: 'password_hash', type: 'varchar', length: 255, select: false })
   passwordHash!: string;
 
