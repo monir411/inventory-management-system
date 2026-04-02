@@ -18,6 +18,7 @@ import type { Company, Product, Route, Sale, Shop } from '@/types/api';
 type SaleItemForm = {
   id: string;
   productId: string;
+  productSearch: string;
   quantity: string;
   unitPrice: string;
 };
@@ -27,6 +28,7 @@ type PaymentMode = 'full' | 'due';
 const initialItem = (): SaleItemForm => ({
   id: `${Date.now()}-${Math.random()}`,
   productId: '',
+  productSearch: '',
   quantity: '1',
   unitPrice: '',
 });
@@ -39,11 +41,92 @@ function formatMoneyInput(value: number) {
   return roundCurrency(value).toFixed(2);
 }
 
+function normalizeProductSearchValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function formatProductSearchLabel(product: Product) {
+  return `${product.name} (${product.unit})`;
+}
+
+function getProductSearchScore(product: Product, keyword: string) {
+  const normalizedKeyword = normalizeProductSearchValue(keyword);
+
+  if (!normalizedKeyword) {
+    return 1;
+  }
+
+  const name = normalizeProductSearchValue(product.name);
+  const sku = normalizeProductSearchValue(product.sku);
+  const unit = normalizeProductSearchValue(product.unit);
+  const companyName = normalizeProductSearchValue(product.company?.name ?? '');
+  const companyCode = normalizeProductSearchValue(product.company?.code ?? '');
+  const searchParts = normalizedKeyword.split(/\s+/).filter(Boolean);
+
+  let score = 0;
+
+  if (sku === normalizedKeyword) score += 220;
+  else if (sku.startsWith(normalizedKeyword)) score += 180;
+  else if (sku.includes(normalizedKeyword)) score += 130;
+
+  if (name === normalizedKeyword) score += 210;
+  else if (name.startsWith(normalizedKeyword)) score += 170;
+  else if (name.includes(normalizedKeyword)) score += 125;
+
+  if (companyCode === normalizedKeyword) score += 120;
+  else if (companyCode.startsWith(normalizedKeyword)) score += 90;
+  else if (companyCode.includes(normalizedKeyword)) score += 60;
+
+  if (companyName === normalizedKeyword) score += 110;
+  else if (companyName.startsWith(normalizedKeyword)) score += 80;
+  else if (companyName.includes(normalizedKeyword)) score += 55;
+
+  if (unit === normalizedKeyword) score += 40;
+  else if (unit.includes(normalizedKeyword)) score += 20;
+
+  if (
+    searchParts.length > 1 &&
+    searchParts.every(
+      (part) =>
+        name.includes(part) ||
+        sku.includes(part) ||
+        companyName.includes(part) ||
+        companyCode.includes(part),
+    )
+  ) {
+    score += 70;
+  }
+
+  return score;
+}
+
+function getAdvancedProductMatches(products: Product[], keyword: string, limit = 8) {
+  const rankedMatches = products
+    .map((product, index) => ({
+      product,
+      index,
+      score: getProductSearchScore(product, keyword),
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort(
+      (left, right) =>
+        right.score - left.score ||
+        left.index - right.index ||
+        left.product.name.localeCompare(right.product.name),
+    );
+
+  return {
+    matches: rankedMatches.slice(0, limit).map((entry) => entry.product),
+    total: rankedMatches.length,
+  };
+}
+
 export function CreateSalePage() {
   const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
+  const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [companyId, setCompanyId] = useState('');
   const [routeId, setRouteId] = useState('');
@@ -54,6 +137,8 @@ export function CreateSalePage() {
   const [paidAmount, setPaidAmount] = useState('0.00');
   const [note, setNote] = useState('');
   const [items, setItems] = useState<SaleItemForm[]>([initialItem()]);
+  const [activeProductSearchId, setActiveProductSearchId] = useState<string | null>(null);
+  const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,13 +167,15 @@ export function CreateSalePage() {
       try {
         setIsLoading(true);
         setError(null);
-        const [companyData, routeData] = await Promise.all([
+        const [companyData, routeData, productData] = await Promise.all([
           getCompanies(),
           getRoutes(),
+          getProducts(),
         ]);
 
         setCompanies(companyData);
         setRoutes(routeData);
+        setAllProducts(productData);
         setCompanyId(String(companyData[0]?.id ?? ''));
         setRouteId(String(routeData[0]?.id ?? ''));
       } catch (loadError) {
@@ -109,6 +196,14 @@ export function CreateSalePage() {
     async function loadCompanyProducts() {
       if (!companyId) {
         setProducts([]);
+        setItems((current) =>
+          current.map((item) => ({
+            ...item,
+            productId: '',
+            productSearch: '',
+            unitPrice: '',
+          })),
+        );
         return;
       }
 
@@ -117,18 +212,30 @@ export function CreateSalePage() {
         setProducts(productData);
         setItems((current) =>
           current.map((item) => {
+            const selectedProduct = productData.find(
+              (product) => product.id === Number(item.productId),
+            );
+
             if (
               item.productId &&
               productData.some((product) => product.id === Number(item.productId))
             ) {
-              return item;
+              return {
+                ...item,
+                productSearch: selectedProduct
+                  ? formatProductSearchLabel(selectedProduct)
+                  : '',
+                unitPrice:
+                  item.unitPrice ||
+                  (selectedProduct ? String(selectedProduct.salePrice) : ''),
+              };
             }
 
-            const firstProduct = productData[0];
             return {
               ...item,
-              productId: firstProduct ? String(firstProduct.id) : '',
-              unitPrice: firstProduct ? String(firstProduct.salePrice) : '',
+              productId: '',
+              productSearch: '',
+              unitPrice: '',
             };
           }),
         );
@@ -171,12 +278,19 @@ export function CreateSalePage() {
     void loadRouteShops();
   }, [routeId, shopId]);
 
+  const companyById = useMemo(
+    () => new Map(companies.map((company) => [company.id, company])),
+    [companies],
+  );
+
   const selectedProducts = useMemo(
     () =>
       items.map((item) =>
-        products.find((product) => product.id === Number(item.productId)) ?? null,
+        allProducts.find((product) => product.id === Number(item.productId)) ??
+        products.find((product) => product.id === Number(item.productId)) ??
+        null,
       ),
-    [items, products],
+    [allProducts, items, products],
   );
 
   const itemCalculations = useMemo(
@@ -223,16 +337,48 @@ export function CreateSalePage() {
     setPaidAmount(formatMoneyInput(totalAmount));
   }, [paymentMode, totalAmount]);
 
-  function buildFreshItems(nextProducts: Product[]) {
-    const firstProduct = nextProducts[0];
+  function buildFreshItems() {
+    return [initialItem()];
+  }
 
-    return [
-      {
-        ...initialItem(),
-        productId: firstProduct ? String(firstProduct.id) : '',
-        unitPrice: firstProduct ? String(firstProduct.salePrice) : '',
-      },
-    ];
+  function updateSaleItem(itemId: string, updater: (item: SaleItemForm) => SaleItemForm) {
+    setItems((current) =>
+      current.map((item) => (item.id === itemId ? updater(item) : item)),
+    );
+  }
+
+  function autoSelectProductForSearch(itemId: string, keyword: string) {
+    const normalizedKeyword = normalizeProductSearchValue(keyword);
+    const autoSelectionPool = allProducts.length > 0 ? allProducts : products;
+    const bestMatch =
+      normalizedKeyword.length >= 3
+        ? getAdvancedProductMatches(autoSelectionPool, keyword, 1).matches[0]
+        : undefined;
+
+    updateSaleItem(itemId, (item) => ({
+      ...item,
+      productId: bestMatch ? String(bestMatch.id) : '',
+      productSearch: keyword,
+      unitPrice: bestMatch ? String(bestMatch.salePrice) : '',
+    }));
+
+    if (bestMatch && String(bestMatch.companyId) !== companyId) {
+      setCompanyId(String(bestMatch.companyId));
+    }
+  }
+
+  function selectProductForItem(itemId: string, nextProduct: Product) {
+    updateSaleItem(itemId, (item) => ({
+      ...item,
+      productId: String(nextProduct.id),
+      productSearch: formatProductSearchLabel(nextProduct),
+      unitPrice: String(nextProduct.salePrice),
+    }));
+    if (String(nextProduct.companyId) !== companyId) {
+      setCompanyId(String(nextProduct.companyId));
+    }
+    setActiveProductSearchId(null);
+    setHighlightedProductIndex(0);
   }
 
   function prepareNextOrder(createdSale: Sale) {
@@ -241,7 +387,7 @@ export function CreateSalePage() {
     setPaidAmount('0.00');
     setNote('');
     setShopId('');
-    setItems(buildFreshItems(products));
+    setItems(buildFreshItems());
     setSuccessMessage(
       `Sale ${createdSale.invoiceNo} created. You can now enter the next order.`,
     );
@@ -521,6 +667,31 @@ export function CreateSalePage() {
                 {items.map((item, index) => {
                   const product = selectedProducts[index];
                   const calculation = itemCalculations[index];
+                  const selectedProductCompany = product
+                    ? product.company ?? companyById.get(product.companyId)
+                    : null;
+                  const isGlobalProductSearch = item.productSearch.trim().length > 0;
+                  const productSearchPool =
+                    isGlobalProductSearch && allProducts.length > 0
+                      ? allProducts
+                      : products;
+                  const { matches: matchedProducts, total: totalMatchedProducts } =
+                    getAdvancedProductMatches(productSearchPool, item.productSearch);
+                  const showProductMatches = activeProductSearchId === item.id;
+                  const safeHighlightedProductIndex =
+                    matchedProducts.length > 0
+                      ? Math.min(
+                          highlightedProductIndex,
+                          matchedProducts.length - 1,
+                        )
+                      : -1;
+                  const productSearchStatusLabel = item.productSearch.trim()
+                    ? totalMatchedProducts > matchedProducts.length
+                      ? `Showing ${matchedProducts.length} of ${totalMatchedProducts} matches across companies`
+                      : `${totalMatchedProducts} match${
+                          totalMatchedProducts === 1 ? '' : 'es'
+                        } across companies`
+                    : `${products.length} products in selected company`;
 
                   return (
                     <div
@@ -532,37 +703,231 @@ export function CreateSalePage() {
                           <span className="text-sm font-medium text-slate-700">
                             Product
                           </span>
-                          <select
-                            value={item.productId}
-                            onChange={(event) => {
-                              const nextProduct = products.find(
-                                (productOption) =>
-                                  productOption.id === Number(event.target.value),
-                              );
+                          <div className="space-y-3">
+                            <div className="relative">
+                              <input
+                                value={item.productSearch}
+                                onFocus={() => {
+                                  setActiveProductSearchId(item.id);
+                                  setHighlightedProductIndex(0);
+                                }}
+                                onBlur={() => {
+                                  window.setTimeout(() => {
+                                    setActiveProductSearchId((current) =>
+                                      current === item.id ? null : current,
+                                    );
+                                  }, 120);
+                                }}
+                                onChange={(event) => {
+                                  const nextValue = event.target.value;
+                                  autoSelectProductForSearch(item.id, nextValue);
+                                  setActiveProductSearchId(item.id);
+                                  setHighlightedProductIndex(0);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'ArrowDown') {
+                                    event.preventDefault();
+                                    setActiveProductSearchId(item.id);
+                                    setHighlightedProductIndex((current) =>
+                                      matchedProducts.length === 0
+                                        ? 0
+                                        : Math.min(
+                                            current + 1,
+                                            matchedProducts.length - 1,
+                                          ),
+                                    );
+                                    return;
+                                  }
 
-                              setItems((current) =>
-                                current.map((currentItem) =>
-                                  currentItem.id === item.id
-                                    ? {
-                                        ...currentItem,
-                                        productId: event.target.value,
-                                        unitPrice: nextProduct
-                                          ? String(nextProduct.salePrice)
-                                          : currentItem.unitPrice,
-                                      }
-                                    : currentItem,
-                                ),
-                              );
-                            }}
-                            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
-                          >
-                            <option value="">Select product</option>
-                            {products.map((productOption) => (
-                              <option key={productOption.id} value={productOption.id}>
-                                {productOption.name} ({productOption.unit})
-                              </option>
-                            ))}
-                          </select>
+                                  if (event.key === 'ArrowUp') {
+                                    event.preventDefault();
+                                    setHighlightedProductIndex((current) =>
+                                      Math.max(current - 1, 0),
+                                    );
+                                    return;
+                                  }
+
+                                  if (event.key === 'Enter' && matchedProducts.length > 0) {
+                                    event.preventDefault();
+                                    selectProductForItem(
+                                      item.id,
+                                      matchedProducts[
+                                        safeHighlightedProductIndex >= 0
+                                          ? safeHighlightedProductIndex
+                                          : 0
+                                      ],
+                                    );
+                                    return;
+                                  }
+
+                                  if (event.key === 'Escape') {
+                                    setActiveProductSearchId(null);
+                                    setHighlightedProductIndex(0);
+                                  }
+                                }}
+                                placeholder="Search by product name, SKU, or unit"
+                                className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
+                              />
+
+                              {showProductMatches ? (
+                                <div className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-lg">
+                                  {matchedProducts.length > 0 ? (
+                                    <>
+                                      <div className="border-b border-slate-100 px-4 py-3">
+                                        <div className="flex items-center justify-between gap-3">
+                                          <div>
+                                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                                              {item.productSearch.trim()
+                                                ? 'Best matches across companies'
+                                                : 'Browse products'}
+                                            </p>
+                                            <p className="mt-1 text-xs text-slate-400">
+                                              Type to narrow results. Press Enter to select.
+                                            </p>
+                                          </div>
+                                          <span className="rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium text-slate-600">
+                                            {productSearchStatusLabel}
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <div className="max-h-72 overflow-y-auto p-2">
+                                        {matchedProducts.map((productOption, matchIndex) => {
+                                          const isHighlighted =
+                                            matchIndex === safeHighlightedProductIndex;
+                                          const isSelected =
+                                            productOption.id === Number(item.productId);
+                                          const matchedCompany =
+                                            productOption.company ??
+                                            companyById.get(productOption.companyId);
+
+                                          return (
+                                            <button
+                                              key={productOption.id}
+                                              type="button"
+                                              onMouseDown={(event) => event.preventDefault()}
+                                              onMouseEnter={() =>
+                                                setHighlightedProductIndex(matchIndex)
+                                              }
+                                              onClick={() =>
+                                                selectProductForItem(item.id, productOption)
+                                              }
+                                              className={`flex w-full items-start justify-between gap-3 rounded-2xl px-3 py-3 text-left transition ${
+                                                isHighlighted
+                                                  ? 'bg-slate-900 text-white'
+                                                  : isSelected
+                                                    ? 'bg-cyan-50'
+                                                    : 'hover:bg-slate-50'
+                                              }`}
+                                            >
+                                              <div>
+                                                <div className="flex items-center gap-2">
+                                                  <p
+                                                    className={`font-medium ${
+                                                      isHighlighted
+                                                        ? 'text-white'
+                                                        : 'text-slate-900'
+                                                    }`}
+                                                  >
+                                                    {productOption.name}
+                                                  </p>
+                                                  {isSelected ? (
+                                                    <span
+                                                      className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+                                                        isHighlighted
+                                                          ? 'bg-white/15 text-white'
+                                                          : 'bg-cyan-100 text-cyan-700'
+                                                      }`}
+                                                    >
+                                                      Selected
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+                                                <p
+                                                  className={`mt-1 text-xs ${
+                                                    isHighlighted
+                                                      ? 'text-slate-200'
+                                                      : 'text-slate-500'
+                                                  }`}
+                                                >
+                                                  SKU {productOption.sku} / Unit {productOption.unit}
+                                                </p>
+                                                <p
+                                                  className={`mt-1 text-xs ${
+                                                    isHighlighted
+                                                      ? 'text-slate-300'
+                                                      : 'text-slate-400'
+                                                  }`}
+                                                >
+                                                  Company {matchedCompany?.name || 'Unknown'} /{' '}
+                                                  {matchedCompany?.code || 'N/A'}
+                                                </p>
+                                              </div>
+                                              <div className="text-right">
+                                                <span
+                                                  className={`text-xs font-semibold ${
+                                                    isHighlighted
+                                                      ? 'text-white'
+                                                      : 'text-slate-600'
+                                                  }`}
+                                                >
+                                                  {formatCurrency(productOption.salePrice)}
+                                                </span>
+                                                <p
+                                                  className={`mt-1 text-[11px] ${
+                                                    isHighlighted
+                                                      ? 'text-slate-300'
+                                                      : 'text-slate-400'
+                                                  }`}
+                                                >
+                                                  Buy {formatCurrency(productOption.buyPrice)}
+                                                </p>
+                                              </div>
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <div className="px-4 py-4 text-sm text-slate-500">
+                                      {isGlobalProductSearch
+                                        ? 'No matching product found in any company.'
+                                        : 'No products found for the selected company.'}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
+                              <span>{productSearchStatusLabel}</span>
+                              <span>
+                                {item.productSearch.trim().length >= 3
+                                  ? 'Company + product auto-select is active'
+                                  : 'Type 3+ letters or use Arrow + Enter'}
+                              </span>
+                            </div>
+
+                            {product ? (
+                              <div className="rounded-2xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-900">
+                                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">
+                                  Selected product
+                                </p>
+                                <p className="mt-2 font-semibold">{product.name}</p>
+                                <p className="mt-1 text-xs">
+                                  SKU {product.sku} / Unit {product.unit} / Sale price{' '}
+                                  {formatCurrency(product.salePrice)}
+                                </p>
+                                <p className="mt-1 text-xs text-cyan-700">
+                                  Company {selectedProductCompany?.name || 'Unknown'} /{' '}
+                                  {selectedProductCompany?.code || 'N/A'}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="rounded-2xl border border-dashed border-slate-200 bg-white px-4 py-3 text-sm text-slate-500">
+                                Search and pick a product for this sale item.
+                              </div>
+                            )}
+                          </div>
                         </label>
 
                         <label className="block space-y-2">
@@ -575,16 +940,10 @@ export function CreateSalePage() {
                             step="0.001"
                             value={item.quantity}
                             onChange={(event) =>
-                              setItems((current) =>
-                                current.map((currentItem) =>
-                                  currentItem.id === item.id
-                                    ? {
-                                        ...currentItem,
-                                        quantity: event.target.value,
-                                      }
-                                    : currentItem,
-                                ),
-                              )
+                              updateSaleItem(item.id, (currentItem) => ({
+                                ...currentItem,
+                                quantity: event.target.value,
+                              }))
                             }
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
                           />
@@ -600,16 +959,10 @@ export function CreateSalePage() {
                             step="0.01"
                             value={item.unitPrice}
                             onChange={(event) =>
-                              setItems((current) =>
-                                current.map((currentItem) =>
-                                  currentItem.id === item.id
-                                    ? {
-                                        ...currentItem,
-                                        unitPrice: event.target.value,
-                                      }
-                                    : currentItem,
-                                ),
-                              )
+                              updateSaleItem(item.id, (currentItem) => ({
+                                ...currentItem,
+                                unitPrice: event.target.value,
+                              }))
                             }
                             className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm"
                           />

@@ -1,7 +1,9 @@
 import { apiRequest } from './client';
 import type {
   CreateStockMovementPayload,
+  StockInvestmentSummary,
   StockMovement,
+  StockMovementQuery,
   StockSummaryItem,
 } from '@/types/api';
 
@@ -27,9 +29,18 @@ export function getZeroStockProducts(companyId?: number, search?: string) {
   });
 }
 
-export function getStockMovements(companyId: number, productId?: number) {
+export function getStockInvestmentSummary(companyId?: number, search?: string) {
+  return apiRequest<StockInvestmentSummary>('stock/summary/investment', {
+    query: { companyId, search },
+  });
+}
+
+export function getStockMovements(
+  companyId: number,
+  query: StockMovementQuery = {},
+) {
   return apiRequest<StockMovement[]>('stock/movements', {
-    query: { companyId, productId },
+    query: { companyId, ...query },
   });
 }
 

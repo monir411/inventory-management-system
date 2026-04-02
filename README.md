@@ -1,28 +1,44 @@
 # Dealer ERP System
 
-Dealer ERP is a backend-connected admin workspace for managing company master data, products, stock, routes, shops, sales, and due payments.
+Dealer ERP is a backend-connected admin workspace for managing companies, products, stock, routes, shops, sales, due balances, and payment collection.
 
-This repository currently contains:
+This repository contains:
 
-- a NestJS REST API in [`backend/`](c:/Users/alvin%20monir/Desktop/deler%20erp%20system/backend)
-- a Next.js admin frontend in [`frontend/`](c:/Users/alvin%20monir/Desktop/deler%20erp%20system/frontend)
+- a NestJS REST API in `backend/`
+- a Next.js admin frontend in `frontend/`
 
-For the full audited implementation breakdown, see [`PROJECT_STATUS.md`](c:/Users/alvin%20monir/Desktop/deler%20erp%20system/PROJECT_STATUS.md).
+For a deeper audit-style breakdown of the codebase, see `PROJECT_STATUS.md`.
 
-## Overview
+## Current Product Snapshot
 
-Based on the current codebase, the app supports:
+The project currently works as an operations-first ERP/admin tool with these active workflows:
 
 - company management
 - product management
 - route and shop management
-- stock movement entry and stock summaries
+- stock movement recording
+- live stock summary, low-stock, and zero-stock monitoring
 - sales creation with multiple items
-- due tracking
+- due sales tracking
 - due payment collection
-- sales summaries and filtered sales views
+- sales summary and due summary dashboards
 
-The current implementation is an operational admin tool. Authentication, purchases, returns, reports/export, and migrations are not clearly implemented in this repository.
+It does not currently implement a full auth system, purchase flow, return workflow, export/reporting suite, or migration-based schema history.
+
+The backend now also includes a repeatable demo seed script so the UI can be populated quickly after a reset.
+
+## Recent Frontend Work
+
+The frontend has been pushed well beyond basic CRUD and now includes:
+
+- a merged stock workspace where current stock, low stock, zero stock, and movement history all live on `/stock`
+- a legacy `/stock/movements` route that redirects into the merged stock workspace
+- premium stock UI with a command-center hero, upgraded filter cockpit, polished summary cards, richer desktop/mobile stock views, and better empty states
+- stock quick-action popups for `Add Opening Stock`, `Add Stock In`, and `Add Adjustment`
+- smart stock keyword matching that can auto-select the strongest company and product match
+- sales list server-side pagination with 10 rows per page
+- a smarter Create Sale flow with advanced product search, global product matching, company/product auto-selection, and live totals
+- sale detail and shop due detail views for receiving and reviewing payments
 
 ## Tech Stack
 
@@ -30,7 +46,7 @@ The current implementation is an operational admin tool. Authentication, purchas
 
 - NestJS 11
 - TypeScript
-- TypeORM
+- TypeORM 0.3
 - PostgreSQL
 - class-validator
 - class-transformer
@@ -60,6 +76,7 @@ The current implementation is an operational admin tool. Authentication, purchas
 |   |       |-- sales/
 |   |       |-- shops/
 |   |       `-- stock/
+|   |-- .env
 |   |-- .env.example
 |   `-- package.json
 |-- frontend/
@@ -70,6 +87,7 @@ The current implementation is an operational admin tool. Authentication, purchas
 |   |   |-- routes/
 |   |   |-- sales/
 |   |   |   |-- create/
+|   |   |   |-- shops/
 |   |   |   `-- [id]/
 |   |   |-- shops/
 |   |   `-- stock/
@@ -82,124 +100,120 @@ The current implementation is an operational admin tool. Authentication, purchas
 `-- README.md
 ```
 
-## Implemented Backend Modules
+## Frontend Pages
 
-- `Companies`
-  - create, list, update, delete with uniqueness checks on company code
-- `Products`
-  - create, list, update, delete with company-level SKU uniqueness
-- `Stock`
-  - opening stock, stock-in, adjustment, movement history, current/low/zero stock summaries
-- `Routes`
-  - create, list, update, deactivate, list shops under route
-- `Shops`
-  - create, list, update, deactivate, route-linked shop management
-- `Sales`
-  - create sale, list sales, sale details, summaries, due overview, receive payment
-
-## Implemented Frontend Pages
+### Dashboard
 
 - `/`
-  - dashboard with company/product/stock summary cards
+- summary cards for companies, products, sales, profit, and quick links into the main workflows
+
+### Companies
+
 - `/companies`
-  - company list and create/edit form
+- create, edit, view, and search companies
+
+### Products
+
 - `/products`
-  - company-wise product management with stock column
+- company-wise product management
 - `/products/all`
-  - cross-company product list with total counter and zero-stock highlighting
-- `/stock`
-  - stock summary, low stock, zero stock, movement history, and stock entry forms
+- cross-company product list with stock-aware visibility
+
+### Routes and Shops
+
 - `/routes`
-  - route list and create/edit form
+- route management
 - `/shops`
-  - shop list with route filter and create/edit form
+- shop management with route linking
+
+### Stock Workspace
+
+- `/stock`
+- merged stock and movement workspace
+- current stock summary
+- low stock products
+- zero stock products
+- movement history
+- company/product/type/date filters
+- premium filter cockpit and premium stock summary UI
+- popup-based stock actions for opening stock, stock-in, and adjustment
+
+### Sales
+
 - `/sales`
-  - filtered sales list, due filter, search, and summary cards/tables
+- sales summary dashboard
+- paginated sales list
+- route-wise, company-wise, shop-wise, and due summaries
 - `/sales/create`
-  - multi-item sale creation with live totals and due validation
+- multi-item sale creation with advanced product search and live calculations
 - `/sales/[id]`
-  - sale details, payment history, and receive-due-payment form
+- sale details and due payment collection
+- `/sales/shops/[id]`
+- shop-level due details and payment history
 
-## Implemented API Surface
+## Backend Modules
 
-Only controller-defined endpoints currently in code:
+### Companies
 
-- `GET /api`
-- `GET /api/health`
-- `POST /api/companies`
-- `GET /api/companies`
-- `GET /api/companies/:id`
-- `PATCH /api/companies/:id`
-- `DELETE /api/companies/:id`
-- `POST /api/products`
-- `GET /api/products`
-- `GET /api/products/:id`
-- `PATCH /api/products/:id`
-- `DELETE /api/products/:id`
-- `POST /api/stock/opening`
-- `POST /api/stock/in`
-- `POST /api/stock/adjustment`
-- `GET /api/stock/movements`
-- `GET /api/stock/summary/current`
-- `GET /api/stock/summary/low-stock`
-- `GET /api/stock/summary/zero-stock`
-- `POST /api/routes`
-- `GET /api/routes`
-- `GET /api/routes/:id`
-- `GET /api/routes/:id/shops`
-- `PATCH /api/routes/:id`
-- `PATCH /api/routes/:id/deactivate`
-- `POST /api/shops`
-- `GET /api/shops`
-- `GET /api/shops/:id`
-- `GET /api/shops/route/:routeId`
-- `PATCH /api/shops/:id`
-- `PATCH /api/shops/:id/deactivate`
-- `POST /api/sales`
-- `GET /api/sales`
-- `GET /api/sales/summary/today-sales`
-- `GET /api/sales/summary/today-profit`
-- `GET /api/sales/summary/monthly`
-- `GET /api/sales/summary/route-wise`
-- `GET /api/sales/summary/company-wise`
-- `GET /api/sales/summary/due-overview`
-- `GET /api/sales/:id`
-- `POST /api/sales/:id/payments`
+- create, list, fetch, update, and delete companies
+- enforces unique company code
 
-## Business Rules Confirmed In Code
+### Products
+
+- create, list, fetch, update, and delete products
+- supports company-level filtering and search
+- enforces SKU uniqueness within a company
+
+### Routes
+
+- create, list, fetch, update, and deactivate routes
+- list shops under a route
+
+### Shops
+
+- create, list, fetch, update, and deactivate shops
+- supports route-linked filtering
+
+### Stock
+
+- add opening stock
+- add stock-in
+- add adjustment
+- list stock movements
+- calculate current stock summary
+- calculate low-stock products
+- calculate zero-stock products
+
+### Sales
+
+- create multi-item sales
+- list sales with filters and pagination
+- fetch sale details
+- sales summaries by date, route, company, and due
+- receive sale payments
+
+## Key Business Rules Already Implemented
 
 - company code must be unique
-- product SKU must be unique within a company
+- product SKU must be unique inside a company
 - stock is derived from stock movements
-- `SALE_OUT` stock movement reduces stock
 - stock movement product must belong to the submitted company
-- inactive company/product cannot be used for stock movement
+- inactive company or product cannot be used for stock movement
 - route name must be unique
 - shop name must be unique within a route
-- shop cannot be created or moved under an inactive route
-- sale company, route, shop, and products are validated
-- inactive company/route/shop/product cannot be used in sales
-- sale checks available stock before saving
-- due sale requires shop
+- inactive route cannot receive new or moved shops
+- sales validate company, route, shop, and products
+- inactive company, route, shop, or product cannot be used in sales
+- sale creation checks available stock before saving
+- due sale requires a shop
 - paid amount cannot exceed sale total
-- invoice number is unique when provided
-- invoice number is auto-generated when blank
+- invoice number is unique when manually supplied
+- invoice number is auto-generated when left blank
 - due payment cannot exceed current due amount
-
-## Seed / Demo Data
-
-No confirmed demo-data or seed-data script exists.
-
-What is implemented:
-
-- `npm run db:init`
-  - creates/synchronizes schema without demo data
-- `npm run db:reset`
-  - drops and recreates schema without demo data
 
 ## Local Setup
 
-### Backend
+### 1. Backend
 
 ```powershell
 cd backend
@@ -214,7 +228,7 @@ Default backend URLs:
 - app: `http://localhost:3001`
 - API: `http://localhost:3001/api`
 
-### Frontend
+### 2. Frontend
 
 ```powershell
 cd frontend
@@ -227,11 +241,58 @@ Default frontend URL:
 
 - `http://localhost:3000`
 
+## Database Lifecycle
+
+This project currently uses TypeORM schema synchronization instead of migration files.
+
+### Initialize schema
+
+```powershell
+cd backend
+npm run db:init
+```
+
+What it does:
+
+- synchronizes tables
+- does not drop the schema
+- does not load demo data
+
+### Reset database
+
+```powershell
+cd backend
+npm run db:reset
+```
+
+What it does:
+
+- drops the existing schema
+- recreates the schema
+- leaves the database empty
+- does not load demo data
+
+### Seed demo data
+
+```powershell
+cd backend
+npm run db:seed
+```
+
+What it does:
+
+- synchronizes tables if needed
+- creates demo companies, products, routes, and shops
+- creates opening stock, stock-in, and adjustment entries
+- creates demo sales, due balances, and follow-up payments
+- is designed to populate `/stock`, `/sales`, `/sales/create`, and shop due pages with realistic sample data
+- keeps existing records and adds any missing demo records when possible
+
 ## Environment Variables
 
 ### Backend
 
-From [`backend/.env.example`](c:/Users/alvin%20monir/Desktop/deler%20erp%20system/backend/.env.example):
+`backend/.env.example`
 
 ```env
 NODE_ENV=development
@@ -239,63 +300,119 @@ PORT=3001
 DATABASE_URL=postgresql://username:password@ep-example.us-east-2.aws.neon.tech/dealer_erp?sslmode=require
 JWT_SECRET=replace-with-a-long-random-secret
 FRONTEND_URL=http://localhost:3000
+
 DB_SYNCHRONIZE=false
 DB_DROP_SCHEMA=false
 ```
 
 ### Frontend
 
-From [`frontend/.env.local.example`](c:/Users/alvin%20monir/Desktop/deler%20erp%20system/frontend/.env.local.example):
+`frontend/.env.local.example`
 
 ```env
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 ```
 
-## Current Status
+## Useful Scripts
 
-### Implemented
+### Backend
 
-- backend and frontend both run locally
-- core CRUD for companies, products, routes, and shops
-- stock movement workflow
-- stock summary workflow
-- sales creation
-- due tracking
-- due payment collection
-- sales summary dashboards
+```powershell
+npm run start:dev
+npm run build
+npm run lint
+npm run test
+npm run db:init
+npm run db:reset
+npm run db:seed
+```
 
-### Partial / Not Clearly Implemented
+### Frontend
 
-- route deactivation exists in backend, but dedicated frontend action is partial
-- shop deactivation exists in backend, but dedicated frontend action is partial
-- company delete and product delete exist in backend, but current frontend does not expose them
-- authentication is not clearly implemented
-- returns are not implemented
-- reports/export are not implemented
-- migration-based schema management is not implemented
+```powershell
+npm run dev
+npm run build
+npm run lint
+```
 
-## Manual Testing Checklist
+## API Overview
 
-- [ ] create a company
-- [ ] create a route
-- [ ] create a shop under that route
-- [ ] create a product under a company
-- [ ] add opening stock
-- [ ] add stock-in
-- [ ] add adjustment
-- [ ] verify current stock, low stock, and zero stock views
-- [ ] create a fully paid sale
-- [ ] create a due sale with a shop selected
-- [ ] verify insufficient stock blocks invalid sale
-- [ ] open the sale details page
-- [ ] receive a due payment
-- [ ] verify paid amount, due amount, and payment history update
+Base URL:
 
-## Documentation
+- `http://localhost:3001/api`
 
-- [`PROJECT_STATUS.md`](c:/Users/alvin%20monir/Desktop/deler%20erp%20system/PROJECT_STATUS.md)
-  - full audited project status
-  - controller-detected endpoints
-  - entity breakdown
-  - frontend/API integration notes
-  - known issues and practical testing checklist
+Main API groups:
+
+- `/companies`
+- `/products`
+- `/routes`
+- `/shops`
+- `/stock`
+- `/sales`
+- `/health`
+
+Notable stock endpoints:
+
+- `POST /api/stock/opening`
+- `POST /api/stock/in`
+- `POST /api/stock/adjustment`
+- `GET /api/stock/movements`
+- `GET /api/stock/summary/current`
+- `GET /api/stock/summary/low-stock`
+- `GET /api/stock/summary/zero-stock`
+
+Notable sales endpoints:
+
+- `POST /api/sales`
+- `GET /api/sales`
+- `GET /api/sales/:id`
+- `POST /api/sales/:id/payments`
+- `GET /api/sales/summary/today-sales`
+- `GET /api/sales/summary/today-profit`
+- `GET /api/sales/summary/monthly`
+- `GET /api/sales/summary/route-wise`
+- `GET /api/sales/summary/company-wise`
+- `GET /api/sales/summary/due-overview`
+
+## Current Verification Status
+
+The current codebase has recently been verified with:
+
+- `frontend`: `npm run lint`
+- `frontend`: `npm run build`
+- `backend`: `npm run build`
+- `backend`: `npm run db:reset`
+- `backend`: `npm run db:seed`
+
+## Known Gaps
+
+These areas are still outside the confirmed current implementation:
+
+- authentication and user roles
+- purchase workflow
+- return workflow
+- CSV/export/reporting
+- migration-driven schema history
+
+## Manual Smoke Test
+
+- run `npm run db:reset`
+- run `npm run db:seed`
+- create a company
+- create a route
+- create a shop
+- create products under a company
+- open `/stock`
+- add opening stock from the popup
+- add stock-in from the popup
+- add an adjustment from the popup
+- verify current stock, low stock, zero stock, and movement history
+- create a full paid sale
+- create a due sale
+- open sale details and receive a payment
+- open shop due details and verify due/payment history
+
+## Additional Documentation
+
+- `PROJECT_STATUS.md`
+  - detailed audit of modules, entities, routes, and current project status

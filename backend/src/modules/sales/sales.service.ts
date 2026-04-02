@@ -253,6 +253,8 @@ export class SalesService {
   }
 
   async findAll(query: QuerySalesDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 10;
     const queryBuilder = this.salesRepository
       .createQueryBuilder('sale')
       .leftJoinAndSelect('sale.company', 'company')
@@ -263,7 +265,17 @@ export class SalesService {
 
     this.applySalesFilters(queryBuilder, query);
 
-    return queryBuilder.getMany();
+    const [items, totalItems] = await queryBuilder
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      items,
+      totalItems,
+      page,
+      pageSize: limit,
+    };
   }
 
   async findOne(id: number) {

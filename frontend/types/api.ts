@@ -56,6 +56,14 @@ export type StockMovement = {
   product?: Product;
 };
 
+export type StockMovementQuery = {
+  productId?: number;
+  type?: StockMovementType;
+  fromDate?: string;
+  toDate?: string;
+  search?: string;
+};
+
 export type StockSummaryItem = {
   productId: number;
   companyId: number;
@@ -68,10 +76,45 @@ export type StockSummaryItem = {
   productName: string;
   sku: string;
   unit: ProductUnit;
+  buyPrice: number;
+  salePrice: number;
   isActive: boolean;
   currentStock: number;
+  investmentValue: number;
   isLowStock?: boolean;
   isZeroStock?: boolean;
+};
+
+export type StockInvestmentCompanySummary = {
+  companyId: number;
+  companyName: string;
+  companyCode: string;
+  productCount: number;
+  inStockProductCount: number;
+  lowStockProductCount: number;
+  zeroStockProductCount: number;
+  totalQuantity: number;
+  investmentValue: number;
+};
+
+export type StockInvestmentUnitSummary = {
+  unit: ProductUnit;
+  productCount: number;
+  inStockProductCount: number;
+  totalQuantity: number;
+  investmentValue: number;
+};
+
+export type StockInvestmentSummary = {
+  totalInvestment: number;
+  totalProducts: number;
+  inStockProducts: number;
+  lowStockProducts: number;
+  zeroStockProducts: number;
+  companyCount: number;
+  companies: StockInvestmentCompanySummary[];
+  units: StockInvestmentUnitSummary[];
+  items: StockSummaryItem[];
 };
 
 export type CreateProductPayload = {
@@ -205,6 +248,13 @@ export type ReceiveSalePaymentPayload = {
   note?: string;
 };
 
+export type PaginatedResponse<T> = {
+  items: T[];
+  totalItems: number;
+  page: number;
+  pageSize: number;
+};
+
 export type SalesQuery = {
   companyId?: number;
   routeId?: number;
@@ -213,6 +263,8 @@ export type SalesQuery = {
   toDate?: string;
   dueOnly?: boolean;
   search?: string;
+  page?: number;
+  limit?: number;
 };
 
 export type TodaySalesSummary = {

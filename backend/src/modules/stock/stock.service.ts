@@ -57,6 +57,7 @@ export class StockService {
   async findMovements(query: QueryStockMovementsDto) {
     await this.ensureCompanyExists(query.companyId);
 
+    const searchTerm = query.search?.trim();
     const queryBuilder = this.stockMovementsRepository
       .createQueryBuilder('movement')
       .leftJoinAndSelect('movement.company', 'company')
@@ -85,6 +86,24 @@ export class StockService {
       queryBuilder.andWhere('movement.movementDate <= :toDate', {
         toDate: query.toDate,
       });
+    }
+
+    if (searchTerm) {
+      queryBuilder.andWhere(
+        `(
+          "product"."name" ILIKE :search
+          OR "product"."sku" ILIKE :search
+          OR "product"."unit"::text ILIKE :search
+          OR "company"."name" ILIKE :search
+          OR "company"."code" ILIKE :search
+          OR "movement"."type"::text ILIKE :search
+          OR "movement"."productId"::text ILIKE :search
+          OR COALESCE("movement"."note", '') ILIKE :search
+        )`,
+        {
+          search: `%${searchTerm}%`,
+        },
+      );
     }
 
     return queryBuilder
@@ -121,6 +140,110 @@ export class StockService {
 
     const summary = await this.buildStockSummary(query);
     return summary.filter((item) => item.currentStock === 0);
+  }
+
+  async getInvestmentSummary(query: StockSummaryQueryDto) {
+    if (query.companyId) {
+      await this.ensureCompanyExists(query.companyId);
+    }
+
+    const summary = await this.buildStockSummary(query);
+    const companyMap = new Map<
+      number,
+      {
+        companyId: number;
+        companyName: string;
+        companyCode: string;
+        productCount: number;
+        inStockProductCount: number;
+        lowStockProductCount: number;
+        zeroStockProductCount: number;
+        totalQuantity: number;
+        investmentValue: number;
+      }
+    >();
+    const unitMap = new Map<
+      string,
+      {
+        unit: string;
+        productCount: number;
+        inStockProductCount: number;
+        totalQuantity: number;
+        investmentValue: number;
+      }
+    >();
+
+    let totalInvestment = 0;
+
+    for (const item of summary) {
+      const investableQuantity = Math.max(item.currentStock, 0);
+      const investmentValue = this.roundToTwo(investableQuantity * item.buyPrice);
+      totalInvestment = this.roundToTwo(totalInvestment + investmentValue);
+
+      const existingCompany =
+        companyMap.get(item.companyId) ??
+        {
+          companyId: item.companyId,
+          companyName: item.company?.name ?? `Company #${item.companyId}`,
+          companyCode: item.company?.code ?? '',
+          productCount: 0,
+          inStockProductCount: 0,
+          lowStockProductCount: 0,
+          zeroStockProductCount: 0,
+          totalQuantity: 0,
+          investmentValue: 0,
+        };
+
+      existingCompany.productCount += 1;
+      existingCompany.inStockProductCount += investableQuantity > 0 ? 1 : 0;
+      existingCompany.lowStockProductCount += item.isLowStock ? 1 : 0;
+      existingCompany.zeroStockProductCount += item.isZeroStock ? 1 : 0;
+      existingCompany.totalQuantity = this.roundToThree(
+        existingCompany.totalQuantity + investableQuantity,
+      );
+      existingCompany.investmentValue = this.roundToTwo(
+        existingCompany.investmentValue + investmentValue,
+      );
+      companyMap.set(item.companyId, existingCompany);
+
+      const existingUnit =
+        unitMap.get(item.unit) ??
+        {
+          unit: item.unit,
+          productCount: 0,
+          inStockProductCount: 0,
+          totalQuantity: 0,
+          investmentValue: 0,
+        };
+
+      existingUnit.productCount += 1;
+      existingUnit.inStockProductCount += investableQuantity > 0 ? 1 : 0;
+      existingUnit.totalQuantity = this.roundToThree(
+        existingUnit.totalQuantity + investableQuantity,
+      );
+      existingUnit.investmentValue = this.roundToTwo(
+        existingUnit.investmentValue + investmentValue,
+      );
+      unitMap.set(item.unit, existingUnit);
+    }
+
+    return {
+      totalInvestment,
+      totalProducts: summary.length,
+      inStockProducts: summary.filter((item) => item.currentStock > 0).length,
+      lowStockProducts: summary.filter((item) => item.isLowStock).length,
+      zeroStockProducts: summary.filter((item) => item.isZeroStock).length,
+      companyCount: companyMap.size,
+      companies: [...companyMap.values()].sort(
+        (left, right) => right.investmentValue - left.investmentValue,
+      ),
+      units: [...unitMap.values()].sort(
+        (left, right) => right.investmentValue - left.investmentValue,
+      ),
+      items: [...summary].sort(
+        (left, right) => right.investmentValue - left.investmentValue,
+      ),
+    };
   }
 
   private async createMovement(
@@ -229,11 +352,11 @@ export class StockService {
     if (query.search) {
       queryBuilder.andWhere(
         `(
-          product.name ILIKE :search
-          OR product.sku ILIKE :search
-          OR product.unit::text ILIKE :search
-          OR company.name ILIKE :search
-          OR company.code ILIKE :search
+          "product"."name" ILIKE :search
+          OR "product"."sku" ILIKE :search
+          OR "product"."unit"::text ILIKE :search
+          OR "company"."name" ILIKE :search
+          OR "company"."code" ILIKE :search
         )`,
         {
           search: `%${query.search}%`,
@@ -250,6 +373,8 @@ export class StockService {
       .addSelect('product.name', 'productName')
       .addSelect('product.sku', 'sku')
       .addSelect('product.unit', 'unit')
+      .addSelect('product.buyPrice', 'buyPrice')
+      .addSelect('product.salePrice', 'salePrice')
       .addSelect('product.isActive', 'isActive')
       .addSelect('COALESCE("stock_summary"."currentStock", 0)', 'currentStock')
       .orderBy('product.name', 'ASC')
@@ -262,6 +387,8 @@ export class StockService {
         productName: string;
         sku: string;
         unit: string;
+        buyPrice: string;
+        salePrice: string;
         isActive: boolean | string;
         currentStock: string;
       }>();
@@ -281,14 +408,27 @@ export class StockService {
       productName: row.productName,
       sku: row.sku,
       unit: row.unit,
+      buyPrice: Number(row.buyPrice),
+      salePrice: Number(row.salePrice),
       isActive:
         typeof row.isActive === 'boolean'
           ? row.isActive
           : row.isActive === 'true',
       currentStock: Number(row.currentStock),
+      investmentValue: this.roundToTwo(
+        Math.max(Number(row.currentStock), 0) * Number(row.buyPrice),
+      ),
       isLowStock:
         Number(row.currentStock) > 0 && Number(row.currentStock) <= threshold,
       isZeroStock: Number(row.currentStock) === 0,
     }));
+  }
+
+  private roundToTwo(value: number) {
+    return Number(value.toFixed(2));
+  }
+
+  private roundToThree(value: number) {
+    return Number(value.toFixed(3));
   }
 }

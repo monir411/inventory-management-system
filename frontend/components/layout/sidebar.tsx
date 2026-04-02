@@ -5,14 +5,13 @@ import { usePathname } from 'next/navigation';
 
 const navigation = [
   { href: '/', label: 'Dashboard' },
-  { href: '/companies', label: 'Companies' },
+  { href: '/sales', label: 'Sales' },
+  { href: '/products/all', label: 'All Products' }, 
   { href: '/products', label: 'Products' },
-  { href: '/products/all', label: 'All Products' },
   { href: '/stock', label: 'Stock' },
-  { href: '/stock/movements', label: 'Stock Movements' },
   { href: '/routes', label: 'Routes' },
   { href: '/shops', label: 'Shops' },
-  { href: '/sales', label: 'Sales' },
+    { href: '/companies', label: 'Companies' },
 ];
 
 export function Sidebar() {
@@ -37,8 +36,10 @@ export function Sidebar() {
           const isActive =
             item.href === '/'
               ? pathname === item.href
-              : item.href === '/products' || item.href === '/stock'
+              : item.href === '/products'
                 ? pathname === item.href
+                : item.href === '/stock'
+                  ? pathname === item.href || pathname.startsWith('/stock/')
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (

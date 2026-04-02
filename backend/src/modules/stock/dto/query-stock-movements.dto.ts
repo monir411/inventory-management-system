@@ -1,5 +1,12 @@
 import { Type } from 'class-transformer';
-import { IsDate, IsEnum, IsInt, IsOptional, IsPositive } from 'class-validator';
+import {
+  IsDate,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsPositive,
+  IsString,
+} from 'class-validator';
 import { StockMovementType } from '../enums/stock-movement-type.enum';
 
 export class QueryStockMovementsDto {
@@ -27,4 +34,8 @@ export class QueryStockMovementsDto {
   @Type(() => Date)
   @IsDate()
   toDate?: Date;
+
+  @IsOptional()
+  @IsString()
+  search?: string;
 }

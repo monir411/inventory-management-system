@@ -5,6 +5,7 @@ import type {
   CreateSalePayload,
   DueOverviewSummary,
   MonthlySalesSummary,
+  PaginatedResponse,
   ReceiveSalePaymentPayload,
   RouteWiseDueSummary,
   RouteWiseSalesSummary,
@@ -17,7 +18,7 @@ import type {
 } from '@/types/api';
 
 export function getSales(query: SalesQuery = {}) {
-  return apiRequest<Sale[]>('sales', {
+  return apiRequest<PaginatedResponse<Sale>>('sales', {
     query,
   });
 }

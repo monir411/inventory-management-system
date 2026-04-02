@@ -42,4 +42,9 @@ export class StockController {
   getZeroStockProducts(@Query() query: StockSummaryQueryDto) {
     return this.stockService.getZeroStockProducts(query);
   }
+
+  @Get('summary/investment')
+  getInvestmentSummary(@Query() query: StockSummaryQueryDto) {
+    return this.stockService.getInvestmentSummary(query);
+  }
 }

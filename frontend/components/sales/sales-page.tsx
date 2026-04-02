@@ -45,7 +45,7 @@ import type {
   TodaySalesSummary,
 } from '@/types/api';
 
-const salesPageSize = 12;
+const salesPageSize = 10;
 const summaryPageSize = 8;
 
 type SalesSummaryBundle = {
@@ -80,6 +80,7 @@ export function SalesPage() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+  const [salesTotalItems, setSalesTotalItems] = useState(0);
   const [summaries, setSummaries] = useState<SalesSummaryBundle>({
     todaySales: null,
     todayProfit: null,
@@ -104,9 +105,12 @@ export function SalesPage() {
   const [routeDuePage, setRouteDuePage] = useState(1);
   const [shopDuePage, setShopDuePage] = useState(1);
   const [companyDuePage, setCompanyDuePage] = useState(1);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isFilterLoading, setIsFilterLoading] = useState(true);
+  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
+  const [isSalesLoading, setIsSalesLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const latestSalesRequestRef = useRef(0);
+  const latestSummaryRequestRef = useRef(0);
 
   useToastNotification({
     message: error,
@@ -114,10 +118,31 @@ export function SalesPage() {
     tone: 'error',
   });
 
+  const salesQuery = useMemo(
+    () => ({
+      companyId: selectedCompanyId ?? undefined,
+      routeId: selectedRouteId ?? undefined,
+      shopId: selectedShopId ?? undefined,
+      fromDate: fromDate ? getFilterDateTime(fromDate, 'start') : undefined,
+      toDate: toDate ? getFilterDateTime(toDate, 'end') : undefined,
+      dueOnly: dueOnly || undefined,
+      search: searchTerm.trim() || undefined,
+    }),
+    [
+      dueOnly,
+      fromDate,
+      searchTerm,
+      selectedCompanyId,
+      selectedRouteId,
+      selectedShopId,
+      toDate,
+    ],
+  );
+
   useEffect(() => {
     async function loadFilters() {
       try {
-        setIsLoading(true);
+        setIsFilterLoading(true);
         setError(null);
         const [companyData, routeData, shopData] = await Promise.all([
           getCompanies(),
@@ -134,7 +159,7 @@ export function SalesPage() {
             : 'Failed to load sales filters.',
         );
       } finally {
-        setIsLoading(false);
+        setIsFilterLoading(false);
       }
     }
 
@@ -166,28 +191,15 @@ export function SalesPage() {
   }, [selectedRouteId, selectedShopId]);
 
   useEffect(() => {
-    async function loadSalesWorkspace() {
-      const requestId = latestSalesRequestRef.current + 1;
-      latestSalesRequestRef.current = requestId;
+    async function loadSalesSummaries() {
+      const requestId = latestSummaryRequestRef.current + 1;
+      latestSummaryRequestRef.current = requestId;
 
       try {
-        setIsLoading(true);
+        setIsSummaryLoading(true);
         setError(null);
 
-        const query = {
-          companyId: selectedCompanyId ?? undefined,
-          routeId: selectedRouteId ?? undefined,
-          shopId: selectedShopId ?? undefined,
-          fromDate: fromDate
-            ? getFilterDateTime(fromDate, 'start')
-            : undefined,
-          toDate: toDate ? getFilterDateTime(toDate, 'end') : undefined,
-          dueOnly: dueOnly || undefined,
-          search: searchTerm.trim() || undefined,
-        };
-
         const [
-          salesData,
           todaySales,
           todayProfit,
           monthly,
@@ -198,23 +210,21 @@ export function SalesPage() {
           shopWiseDue,
           companyWiseDue,
         ] = await Promise.all([
-          getSales(query),
-          getTodaySalesSummary(query),
-          getTodayProfitSummary(query),
-          getMonthlySalesSummary(query),
-          getDueOverview(query),
-          getRouteWiseSalesSummary(query),
-          getCompanyWiseSalesSummary(query),
-          getRouteWiseDueSummary(query),
-          getShopWiseDueSummary(query),
-          getCompanyWiseDueSummary(query),
+          getTodaySalesSummary(salesQuery),
+          getTodayProfitSummary(salesQuery),
+          getMonthlySalesSummary(salesQuery),
+          getDueOverview(salesQuery),
+          getRouteWiseSalesSummary(salesQuery),
+          getCompanyWiseSalesSummary(salesQuery),
+          getRouteWiseDueSummary(salesQuery),
+          getShopWiseDueSummary(salesQuery),
+          getCompanyWiseDueSummary(salesQuery),
         ]);
 
-        if (requestId !== latestSalesRequestRef.current) {
+        if (requestId !== latestSummaryRequestRef.current) {
           return;
         }
 
-        setSales(salesData);
         setSummaries({
           todaySales,
           todayProfit,
@@ -233,32 +243,53 @@ export function SalesPage() {
             : 'Failed to load sales data.',
         );
       } finally {
-        if (requestId === latestSalesRequestRef.current) {
-          setIsLoading(false);
+        if (requestId === latestSummaryRequestRef.current) {
+          setIsSummaryLoading(false);
         }
       }
     }
 
-    void loadSalesWorkspace();
+    void loadSalesSummaries();
   }, [
-    dueOnly,
-    fromDate,
-    searchTerm,
-    selectedCompanyId,
-    selectedRouteId,
-    selectedShopId,
-    toDate,
+    salesQuery,
   ]);
 
-  const visibleSales = useMemo(
-    () => (dueOnly ? sales.filter((sale) => sale.dueAmount > 0) : sales),
-    [dueOnly, sales],
-  );
+  useEffect(() => {
+    async function loadSalesPage() {
+      const requestId = latestSalesRequestRef.current + 1;
+      latestSalesRequestRef.current = requestId;
 
-  const paginatedSales = useMemo(() => {
-    const startIndex = (salesPage - 1) * salesPageSize;
-    return visibleSales.slice(startIndex, startIndex + salesPageSize);
-  }, [salesPage, visibleSales]);
+      try {
+        setIsSalesLoading(true);
+        setError(null);
+
+        const salesData = await getSales({
+          ...salesQuery,
+          page: salesPage,
+          limit: salesPageSize,
+        });
+
+        if (requestId !== latestSalesRequestRef.current) {
+          return;
+        }
+
+        setSales(salesData.items);
+        setSalesTotalItems(salesData.totalItems);
+      } catch (loadError) {
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : 'Failed to load sales data.',
+        );
+      } finally {
+        if (requestId === latestSalesRequestRef.current) {
+          setIsSalesLoading(false);
+        }
+      }
+    }
+
+    void loadSalesPage();
+  }, [salesPage, salesQuery]);
 
   const paginatedRouteSummary = useMemo(() => {
     const startIndex = (routeSummaryPage - 1) * summaryPageSize;
@@ -291,16 +322,16 @@ export function SalesPage() {
     );
   }, [companyDuePage, summaries.companyWiseDue]);
 
-  const filteredSalesStats = useMemo(() => {
-    const dueSales = visibleSales.filter((sale) => sale.dueAmount > 0);
-
-    return {
-      totalSales: visibleSales.length,
-      totalPaid: visibleSales.reduce((sum, sale) => sum + sale.paidAmount, 0),
-      totalDue: dueSales.reduce((sum, sale) => sum + sale.dueAmount, 0),
-      dueSaleCount: dueSales.length,
-    };
-  }, [visibleSales]);
+  const salesListStats = useMemo(
+    () => ({
+      totalSales: salesTotalItems,
+      totalPaid: summaries.dueOverview?.totalPaid ?? 0,
+      totalDue: summaries.dueOverview?.totalDue ?? 0,
+      dueSaleCount: summaries.dueOverview?.dueSaleCount ?? 0,
+    }),
+    [salesTotalItems, summaries.dueOverview],
+  );
+  const isWorkspaceLoading = isFilterLoading || isSummaryLoading;
 
   function resetAllPages() {
     setSalesPage(1);
@@ -488,10 +519,10 @@ export function SalesPage() {
           </button>
         </div>
 
-        {isLoading ? <LoadingBlock label="Loading sales workspace..." /> : null}
+        {isWorkspaceLoading ? <LoadingBlock label="Loading sales workspace..." /> : null}
       </PageCard>
 
-      {!isLoading && !error ? (
+      {!isWorkspaceLoading && !error ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <SummaryMetric
             title="Today sales"
@@ -538,26 +569,26 @@ export function SalesPage() {
         title="Sales List"
         description="Review recent sales, understand collected versus outstanding amounts quickly, and jump into sale or shop due details."
       >
-        {isLoading ? <LoadingBlock label="Loading sales list..." /> : null}
-        {!isLoading && !error ? (
+        {isSalesLoading ? <LoadingBlock label="Loading sales list..." /> : null}
+        {!isSalesLoading && !error ? (
           <>
             <div className="mb-4 grid gap-4 md:grid-cols-4">
               <div className="rounded-2xl bg-slate-50 p-4">
-                <p className="text-sm text-slate-500">Displayed sales</p>
+                <p className="text-sm text-slate-500">Matching sales</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">
-                  {filteredSalesStats.totalSales}
+                  {salesListStats.totalSales}
                 </p>
               </div>
               <div className="rounded-2xl bg-emerald-50 p-4 text-emerald-900">
                 <p className="text-sm">Collected amount</p>
                 <p className="mt-2 text-2xl font-semibold">
-                  {formatCurrency(filteredSalesStats.totalPaid)}
+                  {formatCurrency(salesListStats.totalPaid)}
                 </p>
               </div>
               <div className="rounded-2xl bg-amber-50 p-4 text-amber-900">
                 <p className="text-sm">Outstanding due</p>
                 <p className="mt-2 text-2xl font-semibold">
-                  {formatCurrency(filteredSalesStats.totalDue)}
+                  {formatCurrency(salesListStats.totalDue)}
                 </p>
               </div>
               <button
@@ -567,7 +598,7 @@ export function SalesPage() {
               >
                 <p className="text-sm">Due sales</p>
                 <p className="mt-2 text-2xl font-semibold">
-                  {filteredSalesStats.dueSaleCount}
+                  {salesListStats.dueSaleCount}
                 </p>
                 <p className="mt-2 text-xs font-medium text-rose-800/80">
                   Click to see which shops have due
@@ -592,7 +623,7 @@ export function SalesPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {paginatedSales.map((sale) => (
+                  {sales.map((sale) => (
                     <tr
                       key={sale.id}
                       className={`align-top text-slate-700 ${
@@ -687,7 +718,7 @@ export function SalesPage() {
               </table>
             </div>
 
-            {visibleSales.length === 0 ? (
+            {salesTotalItems === 0 ? (
               <div className="pt-4">
                 <StateMessage
                   title="No sales found"
@@ -698,7 +729,7 @@ export function SalesPage() {
 
             <Pagination
               currentPage={salesPage}
-              totalItems={visibleSales.length}
+              totalItems={salesTotalItems}
               pageSize={salesPageSize}
               onPageChange={setSalesPage}
             />
