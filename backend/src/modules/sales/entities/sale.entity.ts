@@ -14,6 +14,7 @@ import { Company } from '../../companies/entities/company.entity';
 import { Route } from '../../routes/entities/route.entity';
 import { Shop } from '../../shops/entities/shop.entity';
 import { SaleItem } from './sale-item.entity';
+import { SalePayment } from './sale-payment.entity';
 
 @Entity({ name: 'sales' })
 @Index(['companyId', 'saleDate'])
@@ -103,4 +104,9 @@ export class Sale {
     cascade: false,
   })
   items: SaleItem[];
+
+  @OneToMany(() => SalePayment, (salePayment) => salePayment.sale, {
+    cascade: false,
+  })
+  payments: SalePayment[];
 }

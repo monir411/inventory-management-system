@@ -7,6 +7,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Route } from '../routes/entities/route.entity';
+import { Sale } from '../sales/entities/sale.entity';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { QueryShopsDto } from './dto/query-shops.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
@@ -38,9 +39,25 @@ export class ShopsService {
   }
 
   async findAll(query: QueryShopsDto) {
+    const salesSummarySubQuery = this.shopsRepository.manager
+      .createQueryBuilder()
+      .select('sale.shopId', 'shopId')
+      .addSelect('COUNT(sale.id)', 'totalOrders')
+      .addSelect('COALESCE(SUM(sale.dueAmount), 0)', 'totalDue')
+      .from(Sale, 'sale')
+      .where('sale.shopId IS NOT NULL')
+      .groupBy('sale.shopId');
+
     const queryBuilder = this.shopsRepository
       .createQueryBuilder('shop')
       .leftJoinAndSelect('shop.route', 'route')
+      .leftJoin(
+        `(${salesSummarySubQuery.getQuery()})`,
+        'shop_sales',
+        '"shop_sales"."shopId" = shop.id',
+      )
+      .addSelect('COALESCE("shop_sales"."totalOrders", 0)', 'totalOrders')
+      .addSelect('COALESCE("shop_sales"."totalDue", 0)', 'totalDue')
       .orderBy('shop.name', 'ASC');
 
     if (query.routeId) {
@@ -62,7 +79,13 @@ export class ShopsService {
       });
     }
 
-    return queryBuilder.getMany();
+    const { entities, raw } = await queryBuilder.getRawAndEntities();
+
+    return entities.map((shop, index) => ({
+      ...shop,
+      totalOrders: Number(raw[index]?.totalOrders ?? 0),
+      totalDue: Number(raw[index]?.totalDue ?? 0),
+    }));
   }
 
   async findOne(id: number) {

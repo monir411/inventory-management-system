@@ -94,11 +94,18 @@ export class StockService {
   }
 
   async getCurrentStockSummary(query: StockSummaryQueryDto) {
-    await this.ensureCompanyExists(query.companyId);
+    if (query.companyId) {
+      await this.ensureCompanyExists(query.companyId);
+    }
+
     return this.buildStockSummary(query);
   }
 
   async getLowStockProducts(query: StockSummaryQueryDto) {
+    if (query.companyId) {
+      await this.ensureCompanyExists(query.companyId);
+    }
+
     const threshold = query.threshold ?? 10;
     const summary = await this.buildStockSummary(query);
 
@@ -108,6 +115,10 @@ export class StockService {
   }
 
   async getZeroStockProducts(query: StockSummaryQueryDto) {
+    if (query.companyId) {
+      await this.ensureCompanyExists(query.companyId);
+    }
+
     const summary = await this.buildStockSummary(query);
     return summary.filter((item) => item.currentStock === 0);
   }
@@ -207,13 +218,23 @@ export class StockService {
           saleOutType: StockMovementType.SALE_OUT,
         },
       )
-      .where('product.companyId = :companyId', {
+      .where('1 = 1');
+
+    if (query.companyId) {
+      queryBuilder.andWhere('product.companyId = :companyId', {
         companyId: query.companyId,
       });
+    }
 
     if (query.search) {
       queryBuilder.andWhere(
-        '(product.name ILIKE :search OR product.sku ILIKE :search)',
+        `(
+          product.name ILIKE :search
+          OR product.sku ILIKE :search
+          OR product.unit::text ILIKE :search
+          OR company.name ILIKE :search
+          OR company.code ILIKE :search
+        )`,
         {
           search: `%${query.search}%`,
         },

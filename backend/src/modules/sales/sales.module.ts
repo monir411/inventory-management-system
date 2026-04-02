@@ -6,6 +6,7 @@ import { Route } from '../routes/entities/route.entity';
 import { Shop } from '../shops/entities/shop.entity';
 import { StockMovement } from '../stock/entities/stock-movement.entity';
 import { SaleItem } from './entities/sale-item.entity';
+import { SalePayment } from './entities/sale-payment.entity';
 import { Sale } from './entities/sale.entity';
 import { SalesController } from './sales.controller';
 import { SalesService } from './sales.service';
@@ -15,6 +16,7 @@ import { SalesService } from './sales.service';
     TypeOrmModule.forFeature([
       Sale,
       SaleItem,
+      SalePayment,
       Company,
       Route,
       Shop,

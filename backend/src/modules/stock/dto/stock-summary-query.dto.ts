@@ -2,10 +2,11 @@ import { Type } from 'class-transformer';
 import { IsInt, IsOptional, IsPositive, IsString } from 'class-validator';
 
 export class StockSummaryQueryDto {
+  @IsOptional()
   @Type(() => Number)
   @IsInt()
   @IsPositive()
-  companyId: number;
+  companyId?: number;
 
   @IsOptional()
   @IsString()

@@ -19,8 +19,10 @@ import { StockMovement } from '../stock/entities/stock-movement.entity';
 import { StockMovementType } from '../stock/enums/stock-movement-type.enum';
 import { CreateSaleDto } from './dto/create-sale.dto';
 import { QuerySalesDto } from './dto/query-sales.dto';
+import { ReceiveSalePaymentDto } from './dto/receive-sale-payment.dto';
 import { SalesSummaryQueryDto } from './dto/sales-summary-query.dto';
 import { SaleItem } from './entities/sale-item.entity';
+import { SalePayment } from './entities/sale-payment.entity';
 import { Sale } from './entities/sale.entity';
 
 @Injectable()
@@ -220,6 +222,17 @@ export class SalesService {
         ),
       );
 
+      if (paidAmount > 0) {
+        await manager.getRepository(SalePayment).save(
+          manager.getRepository(SalePayment).create({
+            saleId: savedSale.id,
+            amount: paidAmount,
+            paymentDate: createSaleDto.saleDate,
+            note: 'Initial payment at sale creation',
+          }),
+        );
+      }
+
       await manager.getRepository(StockMovement).save(
         manager.getRepository(StockMovement).create(
           preparedItems.map((item) => ({
@@ -254,17 +267,38 @@ export class SalesService {
   }
 
   async findOne(id: number) {
-    const sale = await this.salesRepository.findOne({
-      where: { id },
-      relations: {
-        company: true,
-        route: true,
-        shop: true,
-        items: {
-          product: true,
+    let sale: Sale | null = null;
+
+    try {
+      sale = await this.salesRepository
+        .createQueryBuilder('sale')
+        .leftJoinAndSelect('sale.company', 'company')
+        .leftJoinAndSelect('sale.route', 'route')
+        .leftJoinAndSelect('sale.shop', 'shop')
+        .leftJoinAndSelect('sale.items', 'items')
+        .leftJoinAndSelect('items.product', 'product')
+        .leftJoinAndSelect('sale.payments', 'payments')
+        .where('sale.id = :id', { id })
+        .orderBy('payments.paymentDate', 'DESC')
+        .addOrderBy('payments.id', 'DESC')
+        .getOne();
+    } catch {
+      sale = await this.salesRepository.findOne({
+        where: { id },
+        relations: {
+          company: true,
+          route: true,
+          shop: true,
+          items: {
+            product: true,
+          },
         },
-      },
-    });
+      });
+
+      if (sale) {
+        sale.payments = [];
+      }
+    }
 
     if (!sale) {
       throw new NotFoundException('Sale not found.');
@@ -330,7 +364,9 @@ export class SalesService {
   async getRouteWiseSalesSummary(query: SalesSummaryQueryDto) {
     const queryBuilder = this.salesRepository
       .createQueryBuilder('sale')
+      .leftJoin('sale.company', 'company')
       .leftJoin('sale.route', 'route')
+      .leftJoin('sale.shop', 'shop')
       .select('sale.routeId', 'routeId')
       .addSelect('route.name', 'routeName')
       .addSelect('route.area', 'routeArea')
@@ -373,6 +409,8 @@ export class SalesService {
     const queryBuilder = this.salesRepository
       .createQueryBuilder('sale')
       .leftJoin('sale.company', 'company')
+      .leftJoin('sale.route', 'route')
+      .leftJoin('sale.shop', 'shop')
       .select('sale.companyId', 'companyId')
       .addSelect('company.name', 'companyName')
       .addSelect('company.code', 'companyCode')
@@ -409,6 +447,335 @@ export class SalesService {
       dueAmount: Number(row.dueAmount),
       totalProfit: Number(row.totalProfit),
     }));
+  }
+
+  async getRouteWiseDueSummary(query: SalesSummaryQueryDto) {
+    const queryBuilder = this.salesRepository
+      .createQueryBuilder('sale')
+      .leftJoin('sale.company', 'company')
+      .leftJoin('sale.route', 'route')
+      .leftJoin('sale.shop', 'shop')
+      .select('sale.routeId', 'routeId')
+      .addSelect('route.name', 'routeName')
+      .addSelect('route.area', 'routeArea')
+      .addSelect('COUNT(sale.id)', 'dueSaleCount')
+      .addSelect('COUNT(DISTINCT sale.shopId)', 'shopCount')
+      .addSelect('COALESCE(SUM(sale.dueAmount), 0)', 'totalDue')
+      .addSelect('COALESCE(SUM(sale.paidAmount), 0)', 'totalPaid')
+      .addSelect('MAX(sale.saleDate)', 'lastSaleDate')
+      .where('sale.dueAmount > 0')
+      .groupBy('sale.routeId')
+      .addGroupBy('route.name')
+      .addGroupBy('route.area')
+      .orderBy('"totalDue"', 'DESC')
+      .addOrderBy('route.name', 'ASC');
+
+    this.applySalesFilters(queryBuilder, query);
+
+    const rows = await queryBuilder.getRawMany<{
+      routeId: string;
+      routeName: string;
+      routeArea: string | null;
+      dueSaleCount: string;
+      shopCount: string;
+      totalDue: string;
+      totalPaid: string;
+      lastSaleDate: string | null;
+    }>();
+
+    return rows.map((row) => ({
+      routeId: Number(row.routeId),
+      routeName: row.routeName,
+      routeArea: row.routeArea,
+      dueSaleCount: Number(row.dueSaleCount),
+      shopCount: Number(row.shopCount),
+      totalDue: Number(row.totalDue),
+      totalPaid: Number(row.totalPaid),
+      lastSaleDate: row.lastSaleDate,
+    }));
+  }
+
+  async getShopWiseDueSummary(query: SalesSummaryQueryDto) {
+    const queryBuilder = this.salesRepository
+      .createQueryBuilder('sale')
+      .leftJoin('sale.company', 'company')
+      .leftJoin('sale.route', 'route')
+      .leftJoin('sale.shop', 'shop')
+      .select('sale.shopId', 'shopId')
+      .addSelect('shop.name', 'shopName')
+      .addSelect('shop.ownerName', 'ownerName')
+      .addSelect('route.id', 'routeId')
+      .addSelect('route.name', 'routeName')
+      .addSelect('COUNT(sale.id)', 'dueSaleCount')
+      .addSelect('COUNT(DISTINCT sale.companyId)', 'companyCount')
+      .addSelect('COALESCE(SUM(sale.dueAmount), 0)', 'totalDue')
+      .addSelect('COALESCE(SUM(sale.paidAmount), 0)', 'totalPaid')
+      .addSelect('MAX(sale.saleDate)', 'lastSaleDate')
+      .where('sale.shopId IS NOT NULL')
+      .andWhere('sale.dueAmount > 0')
+      .groupBy('sale.shopId')
+      .addGroupBy('shop.name')
+      .addGroupBy('shop.ownerName')
+      .addGroupBy('route.id')
+      .addGroupBy('route.name')
+      .orderBy('"totalDue"', 'DESC')
+      .addOrderBy('shop.name', 'ASC');
+
+    this.applySalesFilters(queryBuilder, query);
+
+    const rows = await queryBuilder.getRawMany<{
+      shopId: string;
+      shopName: string;
+      ownerName: string | null;
+      routeId: string;
+      routeName: string;
+      dueSaleCount: string;
+      companyCount: string;
+      totalDue: string;
+      totalPaid: string;
+      lastSaleDate: string | null;
+    }>();
+
+    return rows.map((row) => ({
+      shopId: Number(row.shopId),
+      shopName: row.shopName,
+      ownerName: row.ownerName,
+      routeId: Number(row.routeId),
+      routeName: row.routeName,
+      dueSaleCount: Number(row.dueSaleCount),
+      companyCount: Number(row.companyCount),
+      totalDue: Number(row.totalDue),
+      totalPaid: Number(row.totalPaid),
+      lastSaleDate: row.lastSaleDate,
+    }));
+  }
+
+  async getCompanyWiseDueSummary(query: SalesSummaryQueryDto) {
+    const queryBuilder = this.salesRepository
+      .createQueryBuilder('sale')
+      .leftJoin('sale.company', 'company')
+      .leftJoin('sale.route', 'route')
+      .leftJoin('sale.shop', 'shop')
+      .select('sale.companyId', 'companyId')
+      .addSelect('company.name', 'companyName')
+      .addSelect('company.code', 'companyCode')
+      .addSelect('COUNT(sale.id)', 'dueSaleCount')
+      .addSelect('COUNT(DISTINCT sale.shopId)', 'shopCount')
+      .addSelect('COALESCE(SUM(sale.dueAmount), 0)', 'totalDue')
+      .addSelect('COALESCE(SUM(sale.paidAmount), 0)', 'totalPaid')
+      .addSelect('MAX(sale.saleDate)', 'lastSaleDate')
+      .where('sale.dueAmount > 0')
+      .groupBy('sale.companyId')
+      .addGroupBy('company.name')
+      .addGroupBy('company.code')
+      .orderBy('"totalDue"', 'DESC')
+      .addOrderBy('company.name', 'ASC');
+
+    this.applySalesFilters(queryBuilder, query);
+
+    const rows = await queryBuilder.getRawMany<{
+      companyId: string;
+      companyName: string;
+      companyCode: string;
+      dueSaleCount: string;
+      shopCount: string;
+      totalDue: string;
+      totalPaid: string;
+      lastSaleDate: string | null;
+    }>();
+
+    return rows.map((row) => ({
+      companyId: Number(row.companyId),
+      companyName: row.companyName,
+      companyCode: row.companyCode,
+      dueSaleCount: Number(row.dueSaleCount),
+      shopCount: Number(row.shopCount),
+      totalDue: Number(row.totalDue),
+      totalPaid: Number(row.totalPaid),
+      lastSaleDate: row.lastSaleDate,
+    }));
+  }
+
+  async getDueOverview(query: SalesSummaryQueryDto) {
+    const today = this.getDayRange(query.date);
+    const month = this.getMonthRange(query.year, query.month);
+
+    const [todaySummary, monthlySummary, overallSummary] = await Promise.all([
+      this.getAggregateSummary({
+        ...query,
+        fromDate: today.start,
+        toDate: today.end,
+      }),
+      this.getAggregateSummary({
+        ...query,
+        fromDate: month.start,
+        toDate: month.end,
+      }),
+      this.getAggregateSummary(query),
+    ]);
+
+    return {
+      todayDue: todaySummary.dueAmount,
+      monthlyDue: monthlySummary.dueAmount,
+      totalDue: overallSummary.dueAmount,
+      todayPaid: todaySummary.paidAmount,
+      monthlyPaid: monthlySummary.paidAmount,
+      totalPaid: overallSummary.paidAmount,
+      dueSaleCount: overallSummary.dueSaleCount,
+    };
+  }
+
+  async getShopDueDetails(shopId: number) {
+    const shop = await this.dataSource.getRepository(Shop).findOne({
+      where: { id: shopId },
+      relations: { route: true },
+    });
+
+    if (!shop) {
+      throw new NotFoundException('Shop not found.');
+    }
+
+    const summaryRow = await this.salesRepository
+      .createQueryBuilder('sale')
+      .select('COUNT(sale.id)', 'saleCount')
+      .addSelect(
+        'COUNT(CASE WHEN sale.dueAmount > 0 THEN 1 END)',
+        'dueSaleCount',
+      )
+      .addSelect('COALESCE(SUM(sale.totalAmount), 0)', 'totalAmount')
+      .addSelect('COALESCE(SUM(sale.paidAmount), 0)', 'totalPaid')
+      .addSelect('COALESCE(SUM(sale.dueAmount), 0)', 'totalDue')
+      .addSelect('MAX(sale.saleDate)', 'lastSaleDate')
+      .where('sale.shopId = :shopId', { shopId })
+      .getRawOne<{
+        saleCount: string;
+        dueSaleCount: string;
+        totalAmount: string;
+        totalPaid: string;
+        totalDue: string;
+        lastSaleDate: string | null;
+      }>();
+
+    const dueSales = await this.salesRepository
+      .createQueryBuilder('sale')
+      .leftJoinAndSelect('sale.company', 'company')
+      .leftJoinAndSelect('sale.route', 'route')
+      .leftJoinAndSelect('sale.shop', 'shop')
+      .where('sale.shopId = :shopId', { shopId })
+      .andWhere('sale.dueAmount > 0')
+      .orderBy('sale.saleDate', 'DESC')
+      .addOrderBy('sale.id', 'DESC')
+      .getMany();
+
+    const paymentHistoryRows = await this.dataSource
+      .getRepository(SalePayment)
+      .createQueryBuilder('payment')
+      .leftJoin('payment.sale', 'sale')
+      .leftJoin('sale.company', 'company')
+      .leftJoin('sale.route', 'route')
+      .select('payment.id', 'id')
+      .addSelect('payment.saleId', 'saleId')
+      .addSelect('payment.amount', 'amount')
+      .addSelect('payment.paymentDate', 'paymentDate')
+      .addSelect('payment.note', 'note')
+      .addSelect('sale.invoiceNo', 'invoiceNo')
+      .addSelect('sale.totalAmount', 'saleTotalAmount')
+      .addSelect('sale.paidAmount', 'salePaidAmount')
+      .addSelect('sale.dueAmount', 'saleDueAmount')
+      .addSelect('company.id', 'companyId')
+      .addSelect('company.name', 'companyName')
+      .addSelect('route.id', 'routeId')
+      .addSelect('route.name', 'routeName')
+      .where('sale.shopId = :shopId', { shopId })
+      .orderBy('payment.paymentDate', 'DESC')
+      .addOrderBy('payment.id', 'DESC')
+      .getRawMany<{
+        id: string;
+        saleId: string;
+        amount: string;
+        paymentDate: string;
+        note: string | null;
+        invoiceNo: string;
+        saleTotalAmount: string;
+        salePaidAmount: string;
+        saleDueAmount: string;
+        companyId: string;
+        companyName: string;
+        routeId: string;
+        routeName: string;
+      }>();
+
+    return {
+      shop,
+      summary: {
+        saleCount: Number(summaryRow?.saleCount ?? 0),
+        dueSaleCount: Number(summaryRow?.dueSaleCount ?? 0),
+        totalAmount: Number(summaryRow?.totalAmount ?? 0),
+        totalPaid: Number(summaryRow?.totalPaid ?? 0),
+        totalDue: Number(summaryRow?.totalDue ?? 0),
+        lastSaleDate: summaryRow?.lastSaleDate ?? null,
+      },
+      dueSales,
+      paymentHistory: paymentHistoryRows.map((row) => ({
+        id: Number(row.id),
+        saleId: Number(row.saleId),
+        amount: Number(row.amount),
+        paymentDate: row.paymentDate,
+        note: row.note,
+        invoiceNo: row.invoiceNo,
+        saleTotalAmount: Number(row.saleTotalAmount),
+        salePaidAmount: Number(row.salePaidAmount),
+        saleDueAmount: Number(row.saleDueAmount),
+        companyId: Number(row.companyId),
+        companyName: row.companyName,
+        routeId: Number(row.routeId),
+        routeName: row.routeName,
+      })),
+    };
+  }
+
+  async receivePayment(id: number, receiveSalePaymentDto: ReceiveSalePaymentDto) {
+    const saleId = await this.dataSource.transaction(async (manager) => {
+      const saleRepository = manager.getRepository(Sale);
+      const paymentRepository = manager.getRepository(SalePayment);
+
+      const sale = await saleRepository.findOne({
+        where: { id },
+      });
+
+      if (!sale) {
+        throw new NotFoundException('Sale not found.');
+      }
+
+      const amount = this.roundToTwo(receiveSalePaymentDto.amount);
+
+      if (sale.dueAmount <= 0) {
+        throw new BadRequestException('This sale has no due amount left.');
+      }
+
+      if (amount > sale.dueAmount) {
+        throw new BadRequestException(
+          `Payment cannot be greater than due amount (${sale.dueAmount}).`,
+        );
+      }
+
+      sale.paidAmount = this.roundToTwo(sale.paidAmount + amount);
+      sale.dueAmount = this.roundToTwo(sale.totalAmount - sale.paidAmount);
+
+      await saleRepository.save(sale);
+      await paymentRepository.save(
+        paymentRepository.create({
+          saleId: sale.id,
+          amount,
+          paymentDate: receiveSalePaymentDto.paymentDate,
+          note: receiveSalePaymentDto.note?.trim() || null,
+        }),
+      );
+
+      return sale.id;
+    });
+
+    return this.findOne(saleId);
   }
 
   private async getCurrentStockByProduct(
@@ -452,7 +819,14 @@ export class SalesService {
   private async getAggregateSummary(query: SalesSummaryQueryDto) {
     const queryBuilder = this.salesRepository
       .createQueryBuilder('sale')
+      .leftJoin('sale.company', 'company')
+      .leftJoin('sale.route', 'route')
+      .leftJoin('sale.shop', 'shop')
       .select('COUNT(sale.id)', 'saleCount')
+      .addSelect(
+        'COUNT(CASE WHEN sale.dueAmount > 0 THEN 1 END)',
+        'dueSaleCount',
+      )
       .addSelect('COALESCE(SUM(sale.totalAmount), 0)', 'totalAmount')
       .addSelect('COALESCE(SUM(sale.paidAmount), 0)', 'paidAmount')
       .addSelect('COALESCE(SUM(sale.dueAmount), 0)', 'dueAmount')
@@ -462,6 +836,7 @@ export class SalesService {
 
     const row = await queryBuilder.getRawOne<{
       saleCount: string;
+      dueSaleCount: string;
       totalAmount: string;
       paidAmount: string;
       dueAmount: string;
@@ -470,6 +845,7 @@ export class SalesService {
 
     return {
       saleCount: Number(row?.saleCount ?? 0),
+      dueSaleCount: Number(row?.dueSaleCount ?? 0),
       totalAmount: Number(row?.totalAmount ?? 0),
       paidAmount: Number(row?.paidAmount ?? 0),
       dueAmount: Number(row?.dueAmount ?? 0),
@@ -509,6 +885,25 @@ export class SalesService {
       queryBuilder.andWhere('sale.saleDate <= :toDate', {
         toDate: query.toDate,
       });
+    }
+
+    if ('dueOnly' in query && query.dueOnly) {
+      queryBuilder.andWhere('sale.dueAmount > 0');
+    }
+
+    if ('search' in query && query.search) {
+      queryBuilder.andWhere(
+        `(
+          sale.invoiceNo ILIKE :search
+          OR company.name ILIKE :search
+          OR company.code ILIKE :search
+          OR route.name ILIKE :search
+          OR shop.name ILIKE :search
+        )`,
+        {
+          search: `%${query.search}%`,
+        },
+      );
     }
   }
 
