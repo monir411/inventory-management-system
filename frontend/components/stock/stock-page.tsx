@@ -1573,6 +1573,45 @@ function SectionStatusBadge({
   );
 }
 
+function SectionToggleButton({
+  isOpen,
+  onClick,
+  openLabel,
+  closeLabel,
+}: {
+  isOpen: boolean;
+  onClick: () => void;
+  openLabel: string;
+  closeLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center rounded-[22px] border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
+    >
+      {isOpen ? closeLabel : openLabel}
+    </button>
+  );
+}
+
+function SectionCollapsedNotice({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="rounded-[28px] border border-dashed border-slate-200 bg-[linear-gradient(135deg,#ffffff_0%,#f8fafc_100%)] px-5 py-6 shadow-sm">
+      <p className="text-sm font-semibold text-slate-950">{title}</p>
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">
+        {description}
+      </p>
+    </div>
+  );
+}
+
 function MovementHistoryPlaceholder() {
   return (
     <div className="overflow-hidden rounded-[30px] border border-slate-200/80 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.12),transparent_34%),linear-gradient(135deg,#ffffff_0%,#f8fafc_55%,#eef6ff_100%)] p-5 shadow-[0_26px_70px_-44px_rgba(15,23,42,0.5)]">
