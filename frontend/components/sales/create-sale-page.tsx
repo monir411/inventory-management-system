@@ -10,7 +10,7 @@ import { createSale } from '@/lib/api/sales';
 import { getShops } from '@/lib/api/shops';
 import { LoadingBlock } from '@/components/ui/loading-block';
 import { PageCard } from '@/components/ui/page-card';
-import { StateMessage } from '@/components/ui/state-message';
+import { useToastNotification } from '@/components/ui/toast-provider';
 import { formatCurrency } from '@/lib/utils/format';
 import { formatDate } from '@/lib/utils/format';
 import type { Company, Product, Route, Sale, Shop } from '@/types/api';
@@ -22,12 +22,22 @@ type SaleItemForm = {
   unitPrice: string;
 };
 
+type PaymentMode = 'full' | 'due';
+
 const initialItem = (): SaleItemForm => ({
   id: `${Date.now()}-${Math.random()}`,
   productId: '',
   quantity: '1',
   unitPrice: '',
 });
+
+function roundCurrency(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function formatMoneyInput(value: number) {
+  return roundCurrency(value).toFixed(2);
+}
 
 export function CreateSalePage() {
   const router = useRouter();
@@ -40,7 +50,8 @@ export function CreateSalePage() {
   const [shopId, setShopId] = useState('');
   const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 16));
   const [invoiceNo, setInvoiceNo] = useState('');
-  const [paidAmount, setPaidAmount] = useState('0');
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('full');
+  const [paidAmount, setPaidAmount] = useState('0.00');
   const [note, setNote] = useState('');
   const [items, setItems] = useState<SaleItemForm[]>([initialItem()]);
   const [isLoading, setIsLoading] = useState(true);
@@ -49,6 +60,22 @@ export function CreateSalePage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [recentSales, setRecentSales] = useState<Sale[]>([]);
+
+  useToastNotification({
+    message: error,
+    title: 'Could not load sale form',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: formError,
+    title: 'Could not create sale',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: successMessage,
+    title: 'Sale created',
+    tone: 'success',
+  });
 
   useEffect(() => {
     async function loadReferenceData() {
@@ -179,10 +206,22 @@ export function CreateSalePage() {
     () => itemCalculations.reduce((sum, item) => sum + item.lineProfit, 0),
     [itemCalculations],
   );
-  const dueAmount = useMemo(
-    () => totalAmount - Number(paidAmount || 0),
-    [paidAmount, totalAmount],
+  const normalizedPaidAmount = useMemo(
+    () => roundCurrency(Number(paidAmount || 0)),
+    [paidAmount],
   );
+  const dueAmount = useMemo(
+    () => roundCurrency(totalAmount - normalizedPaidAmount),
+    [normalizedPaidAmount, totalAmount],
+  );
+
+  useEffect(() => {
+    if (paymentMode !== 'full') {
+      return;
+    }
+
+    setPaidAmount(formatMoneyInput(totalAmount));
+  }, [paymentMode, totalAmount]);
 
   function buildFreshItems(nextProducts: Product[]) {
     const firstProduct = nextProducts[0];
@@ -198,7 +237,8 @@ export function CreateSalePage() {
 
   function prepareNextOrder(createdSale: Sale) {
     setInvoiceNo('');
-    setPaidAmount('0');
+    setPaymentMode('full');
+    setPaidAmount('0.00');
     setNote('');
     setShopId('');
     setItems(buildFreshItems(products));
@@ -222,6 +262,11 @@ export function CreateSalePage() {
       return;
     }
 
+    if (totalAmount <= 0) {
+      setFormError('Add at least one sale item with valid quantity and price.');
+      return;
+    }
+
     if (dueAmount > 0 && !shopId) {
       setFormError('Shop is required when due amount is greater than zero.');
       return;
@@ -241,7 +286,10 @@ export function CreateSalePage() {
         shopId: shopId ? Number(shopId) : undefined,
         saleDate: new Date(saleDate).toISOString(),
         invoiceNo: invoiceNo.trim() || undefined,
-        paidAmount: Number(paidAmount),
+        paidAmount:
+          paymentMode === 'full'
+            ? roundCurrency(totalAmount)
+            : normalizedPaidAmount,
         note: note.trim() || undefined,
         items: items.map((item) => ({
           productId: Number(item.productId),
@@ -272,6 +320,23 @@ export function CreateSalePage() {
     await submitSale('details');
   }
 
+  function activateFullPaidMode() {
+    setPaymentMode('full');
+  }
+
+  function activateDueMode() {
+    setPaymentMode('due');
+    setPaidAmount((current) => {
+      const currentValue = roundCurrency(Number(current || 0));
+
+      if (currentValue === roundCurrency(totalAmount)) {
+        return '0.00';
+      }
+
+      return current;
+    });
+  }
+
   return (
     <div className="space-y-6">
       <PageCard
@@ -287,16 +352,44 @@ export function CreateSalePage() {
         }
       >
         {isLoading ? <LoadingBlock label="Loading sale form..." /> : null}
-        {error ? (
-          <StateMessage
-            tone="error"
-            title="Could not load sale form"
-            description={error}
-          />
-        ) : null}
 
         {!isLoading && !error ? (
           <form onSubmit={(event) => void handleSubmit(event)} className="space-y-6">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-slate-900">Payment mode</p>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Use full paid for quick daily sales. Switch to due only when payment is not complete.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={activateFullPaidMode}
+                    className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                      paymentMode === 'full'
+                        ? 'bg-emerald-600 text-white'
+                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Full paid sale
+                  </button>
+                  <button
+                    type="button"
+                    onClick={activateDueMode}
+                    className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                      paymentMode === 'due'
+                        ? 'bg-amber-500 text-white'
+                        : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-100'
+                    }`}
+                  >
+                    Due sale
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
               <label className="block space-y-2">
                 <span className="text-sm font-medium text-slate-700">Company</span>
@@ -331,11 +424,17 @@ export function CreateSalePage() {
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">Shop</span>
+                <span className="text-sm font-medium text-slate-700">
+                  Shop {dueAmount > 0 ? '(required for due)' : '(optional)'}
+                </span>
                 <select
                   value={shopId}
                   onChange={(event) => setShopId(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+                  className={`w-full rounded-2xl border bg-slate-50 px-4 py-3 text-sm ${
+                    dueAmount > 0 && !shopId
+                      ? 'border-amber-300'
+                      : 'border-slate-200'
+                  }`}
                 >
                   <option value="">Optional shop</option>
                   {shops.map((shop) => (
@@ -369,14 +468,32 @@ export function CreateSalePage() {
               </label>
 
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-slate-700">Paid amount</span>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-700">Paid amount</span>
+                  {paymentMode === 'full' ? (
+                    <span className="text-xs font-medium text-emerald-700">
+                      Auto-filled from total
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setPaidAmount(formatMoneyInput(totalAmount))}
+                      className="text-xs font-medium text-slate-600 underline underline-offset-4"
+                    >
+                      Use full amount
+                    </button>
+                  )}
+                </div>
                 <input
                   type="number"
                   min="0"
                   step="0.01"
                   value={paidAmount}
                   onChange={(event) => setPaidAmount(event.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm"
+                  disabled={paymentMode === 'full'}
+                  className={`w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm ${
+                    paymentMode === 'full' ? 'cursor-not-allowed opacity-70' : ''
+                  }`}
                 />
               </label>
             </div>
@@ -573,7 +690,13 @@ export function CreateSalePage() {
                   {formatCurrency(totalProfit)}
                 </p>
               </div>
-              <div className="rounded-2xl bg-amber-50 p-5 text-amber-900">
+              <div
+                className={`rounded-2xl p-5 ${
+                  dueAmount > 0
+                    ? 'bg-amber-50 text-amber-900'
+                    : 'bg-emerald-50 text-emerald-900'
+                }`}
+              >
                 <p className="text-sm">Due amount</p>
                 <p className="mt-2 text-3xl font-semibold">
                   {formatCurrency(dueAmount)}
@@ -582,6 +705,14 @@ export function CreateSalePage() {
                   <p className="mt-2 text-xs font-medium">
                     Shop is required before submitting a due sale.
                   </p>
+                ) : paymentMode === 'full' ? (
+                  <p className="mt-2 text-xs font-medium">
+                    This sale will be saved as fully paid.
+                  </p>
+                ) : dueAmount === 0 ? (
+                  <p className="mt-2 text-xs font-medium">
+                    Due is zero, so this sale will be fully paid.
+                  </p>
                 ) : null}
               </div>
             </div>
@@ -589,25 +720,9 @@ export function CreateSalePage() {
             <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
               <p className="font-semibold">Fast order entry</p>
               <p className="mt-2 leading-6">
-                একই দিনে অনেক দোকানে sale করলে `Save & next order` চাপুন। এতে company, route,
-                date একই থাকবে, শুধু next shop আর items দিয়ে পরের sale দ্রুত create করতে পারবেন।
+                Use `Save & next order` when you are entering many sales on the same day. Company, route, date, and the quick full-paid mode stay ready so the next order is faster to enter.
               </p>
             </div>
-
-            {successMessage ? (
-              <StateMessage
-                title="Sale created"
-                description={successMessage}
-              />
-            ) : null}
-
-            {formError ? (
-              <StateMessage
-                tone="error"
-                title="Could not create sale"
-                description={formError}
-              />
-            ) : null}
 
             <div className="flex flex-col gap-3 md:flex-row">
               <button

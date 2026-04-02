@@ -8,6 +8,7 @@ import { LoadingBlock } from '@/components/ui/loading-block';
 import { Pagination } from '@/components/ui/pagination';
 import { PageCard } from '@/components/ui/page-card';
 import { StateMessage } from '@/components/ui/state-message';
+import { useToastNotification } from '@/components/ui/toast-provider';
 import { formatCurrency, formatNumber } from '@/lib/utils/format';
 import type { Company, Product, ProductUnit } from '@/types/api';
 
@@ -45,6 +46,22 @@ export function ProductsPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useToastNotification({
+    message: error,
+    title: 'Could not load products',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: formError,
+    title: 'Could not save product',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: successMessage,
+    title: 'Saved',
+    tone: 'success',
+  });
 
   useEffect(() => {
     async function loadInitialData() {
@@ -235,13 +252,6 @@ export function ProductsPage() {
         }
       >
         {isLoading ? <LoadingBlock label="Loading products..." /> : null}
-        {error ? (
-          <StateMessage
-            tone="error"
-            title="Could not load products"
-            description={error}
-          />
-        ) : null}
         {!isLoading && !error ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -438,21 +448,6 @@ export function ProductsPage() {
           <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
             For bulk product entry, select the company once and keep adding products. The company stays selected after each save.
           </div>
-
-          {successMessage ? (
-            <StateMessage
-              title="Saved"
-              description={successMessage}
-            />
-          ) : null}
-
-          {formError ? (
-            <StateMessage
-              tone="error"
-              title="Could not save product"
-              description={formError}
-            />
-          ) : null}
 
           <div className="flex gap-3">
             <button

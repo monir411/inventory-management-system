@@ -5,14 +5,14 @@ import type {
   StockSummaryItem,
 } from '@/types/api';
 
-export function getStockSummary(companyId: number, search?: string) {
+export function getStockSummary(companyId?: number, search?: string) {
   return apiRequest<StockSummaryItem[]>('stock/summary/current', {
     query: { companyId, search },
   });
 }
 
 export function getLowStockProducts(
-  companyId: number,
+  companyId?: number,
   threshold = 10,
   search?: string,
 ) {
@@ -21,7 +21,7 @@ export function getLowStockProducts(
   });
 }
 
-export function getZeroStockProducts(companyId: number, search?: string) {
+export function getZeroStockProducts(companyId?: number, search?: string) {
   return apiRequest<StockSummaryItem[]>('stock/summary/zero-stock', {
     query: { companyId, search },
   });

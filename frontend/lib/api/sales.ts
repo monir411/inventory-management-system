@@ -1,11 +1,17 @@
 import { apiRequest } from './client';
 import type {
+  CompanyWiseDueSummary,
   CompanyWiseSalesSummary,
   CreateSalePayload,
+  DueOverviewSummary,
   MonthlySalesSummary,
+  ReceiveSalePaymentPayload,
+  RouteWiseDueSummary,
   RouteWiseSalesSummary,
   Sale,
   SalesQuery,
+  ShopDueDetails,
+  ShopWiseDueSummary,
   TodayProfitSummary,
   TodaySalesSummary,
 } from '@/types/api';
@@ -22,6 +28,13 @@ export function getSale(id: number) {
 
 export function createSale(payload: CreateSalePayload) {
   return apiRequest<Sale>('sales', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function receiveSalePayment(id: number, payload: ReceiveSalePaymentPayload) {
+  return apiRequest<Sale>(`sales/${id}/payments`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -61,4 +74,32 @@ export function getCompanyWiseSalesSummary(query: SalesQuery = {}) {
   return apiRequest<CompanyWiseSalesSummary[]>('sales/summary/company-wise', {
     query,
   });
+}
+
+export function getRouteWiseDueSummary(query: SalesQuery = {}) {
+  return apiRequest<RouteWiseDueSummary[]>('sales/summary/route-wise-due', {
+    query,
+  });
+}
+
+export function getShopWiseDueSummary(query: SalesQuery = {}) {
+  return apiRequest<ShopWiseDueSummary[]>('sales/summary/shop-wise-due', {
+    query,
+  });
+}
+
+export function getCompanyWiseDueSummary(query: SalesQuery = {}) {
+  return apiRequest<CompanyWiseDueSummary[]>('sales/summary/company-wise-due', {
+    query,
+  });
+}
+
+export function getDueOverview(query: SalesQuery = {}) {
+  return apiRequest<DueOverviewSummary>('sales/summary/due-overview', {
+    query,
+  });
+}
+
+export function getShopDueDetails(shopId: number) {
+  return apiRequest<ShopDueDetails>(`sales/shops/${shopId}/due-details`);
 }

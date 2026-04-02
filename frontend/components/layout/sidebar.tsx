@@ -9,6 +9,7 @@ const navigation = [
   { href: '/products', label: 'Products' },
   { href: '/products/all', label: 'All Products' },
   { href: '/stock', label: 'Stock' },
+  { href: '/stock/movements', label: 'Stock Movements' },
   { href: '/routes', label: 'Routes' },
   { href: '/shops', label: 'Shops' },
   { href: '/sales', label: 'Sales' },
@@ -36,7 +37,7 @@ export function Sidebar() {
           const isActive =
             item.href === '/'
               ? pathname === item.href
-              : item.href === '/products'
+              : item.href === '/products' || item.href === '/stock'
                 ? pathname === item.href
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
 

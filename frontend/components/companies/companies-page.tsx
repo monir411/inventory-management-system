@@ -10,6 +10,7 @@ import type { Company } from '@/types/api';
 import { LoadingBlock } from '@/components/ui/loading-block';
 import { PageCard } from '@/components/ui/page-card';
 import { StateMessage } from '@/components/ui/state-message';
+import { useToastNotification } from '@/components/ui/toast-provider';
 
 const initialFormState = {
   name: '',
@@ -28,6 +29,23 @@ export function CompaniesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useToastNotification({
+    message: error,
+    title: 'Could not load companies',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: formError,
+    title: 'Could not save company',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: successMessage,
+    title: 'Saved',
+    tone: 'success',
+  });
 
   async function loadCompanies() {
     try {
@@ -70,6 +88,7 @@ export function CompaniesPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError(null);
+    setSuccessMessage(null);
 
     try {
       setIsSaving(true);
@@ -84,9 +103,11 @@ export function CompaniesPage() {
 
       if (editingCompany) {
         await updateCompany(editingCompany.id, payload);
+        setSuccessMessage(`Company "${payload.name}" updated successfully.`);
       } else {
         const company = await createCompany(payload);
         setSelectedCompanyId(company.id);
+        setSuccessMessage(`Company "${payload.name}" created successfully.`);
       }
 
       setEditingCompany(null);
@@ -107,13 +128,6 @@ export function CompaniesPage() {
         description="Browse, create, and update the companies that own products and stock in this phase."
       >
         {isLoading ? <LoadingBlock label="Loading companies..." /> : null}
-        {error ? (
-          <StateMessage
-            tone="error"
-            title="Could not load companies"
-            description={error}
-          />
-        ) : null}
         {!isLoading && !error ? (
           <div className="space-y-3">
             {companies.map((company) => {
@@ -283,14 +297,6 @@ export function CompaniesPage() {
             />
             Company is active
           </label>
-
-          {formError ? (
-            <StateMessage
-              tone="error"
-              title="Could not save company"
-              description={formError}
-            />
-          ) : null}
 
           <div className="flex gap-3">
             <button

@@ -114,6 +114,8 @@ export type Shop = {
   createdAt: string;
   updatedAt: string;
   route?: Route;
+  totalOrders?: number;
+  totalDue?: number;
 };
 
 export type CreateRoutePayload = {
@@ -153,6 +155,7 @@ export type Sale = {
   route?: Route;
   shop?: Shop | null;
   items?: SaleItem[];
+  payments?: SalePayment[];
 };
 
 export type SaleItem = {
@@ -167,6 +170,16 @@ export type SaleItem = {
   createdAt: string;
   updatedAt: string;
   product?: Product;
+};
+
+export type SalePayment = {
+  id: number;
+  saleId: number;
+  amount: number;
+  paymentDate: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type CreateSaleItemPayload = {
@@ -186,12 +199,20 @@ export type CreateSalePayload = {
   items: CreateSaleItemPayload[];
 };
 
+export type ReceiveSalePaymentPayload = {
+  amount: number;
+  paymentDate: string;
+  note?: string;
+};
+
 export type SalesQuery = {
   companyId?: number;
   routeId?: number;
   shopId?: number;
   fromDate?: string;
   toDate?: string;
+  dueOnly?: boolean;
+  search?: string;
 };
 
 export type TodaySalesSummary = {
@@ -218,6 +239,51 @@ export type MonthlySalesSummary = {
   totalProfit: number;
 };
 
+export type DueOverviewSummary = {
+  todayDue: number;
+  monthlyDue: number;
+  totalDue: number;
+  todayPaid: number;
+  monthlyPaid: number;
+  totalPaid: number;
+  dueSaleCount: number;
+};
+
+export type RouteWiseDueSummary = {
+  routeId: number;
+  routeName: string;
+  routeArea: string | null;
+  dueSaleCount: number;
+  shopCount: number;
+  totalDue: number;
+  totalPaid: number;
+  lastSaleDate: string | null;
+};
+
+export type ShopWiseDueSummary = {
+  shopId: number;
+  shopName: string;
+  ownerName: string | null;
+  routeId: number;
+  routeName: string;
+  dueSaleCount: number;
+  companyCount: number;
+  totalDue: number;
+  totalPaid: number;
+  lastSaleDate: string | null;
+};
+
+export type CompanyWiseDueSummary = {
+  companyId: number;
+  companyName: string;
+  companyCode: string;
+  dueSaleCount: number;
+  shopCount: number;
+  totalDue: number;
+  totalPaid: number;
+  lastSaleDate: string | null;
+};
+
 export type RouteWiseSalesSummary = {
   routeId: number;
   routeName: string;
@@ -227,6 +293,36 @@ export type RouteWiseSalesSummary = {
   paidAmount: number;
   dueAmount: number;
   totalProfit: number;
+};
+
+export type ShopPaymentHistoryEntry = {
+  id: number;
+  saleId: number;
+  amount: number;
+  paymentDate: string;
+  note: string | null;
+  invoiceNo: string;
+  saleTotalAmount: number;
+  salePaidAmount: number;
+  saleDueAmount: number;
+  companyId: number;
+  companyName: string;
+  routeId: number;
+  routeName: string;
+};
+
+export type ShopDueDetails = {
+  shop: Shop;
+  summary: {
+    saleCount: number;
+    dueSaleCount: number;
+    totalAmount: number;
+    totalPaid: number;
+    totalDue: number;
+    lastSaleDate: string | null;
+  };
+  dueSales: Sale[];
+  paymentHistory: ShopPaymentHistoryEntry[];
 };
 
 export type CompanyWiseSalesSummary = {

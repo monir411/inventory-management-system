@@ -1,6 +1,8 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
+import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { getCompanies } from '@/lib/api/companies';
 import { getProducts } from '@/lib/api/products';
 import {
@@ -16,7 +18,9 @@ import { LoadingBlock } from '@/components/ui/loading-block';
 import { Pagination } from '@/components/ui/pagination';
 import { PageCard } from '@/components/ui/page-card';
 import { StateMessage } from '@/components/ui/state-message';
-import { formatDate, formatNumber } from '@/lib/utils/format';
+import { useToastNotification } from '@/components/ui/toast-provider';
+import { StockMovementList } from './stock-movement-list';
+import { formatNumber } from '@/lib/utils/format';
 import type {
   Company,
   Product,
@@ -33,7 +37,60 @@ const initialMovementForm = {
 const stockTablePageSize = 10;
 const movementPageSize = 8;
 
+function normalizeMatchValue(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? '';
+}
+
+function getStockMatchScore(
+  item: StockSummaryItem,
+  keyword: string,
+  selectedCompanyId: number | null,
+) {
+  const normalizedKeyword = normalizeMatchValue(keyword);
+  const sku = normalizeMatchValue(item.sku);
+  const productName = normalizeMatchValue(item.productName);
+  const unit = normalizeMatchValue(item.unit);
+  const companyName = normalizeMatchValue(item.company?.name);
+  const companyCode = normalizeMatchValue(item.company?.code);
+
+  let score = 0;
+
+  if (sku === normalizedKeyword) score += 100;
+  else if (sku.startsWith(normalizedKeyword)) score += 75;
+  else if (sku.includes(normalizedKeyword)) score += 50;
+
+  if (productName === normalizedKeyword) score += 95;
+  else if (productName.startsWith(normalizedKeyword)) score += 70;
+  else if (productName.includes(normalizedKeyword)) score += 45;
+
+  if (companyCode === normalizedKeyword) score += 65;
+  else if (companyCode.includes(normalizedKeyword)) score += 35;
+
+  if (companyName === normalizedKeyword) score += 60;
+  else if (companyName.startsWith(normalizedKeyword)) score += 40;
+  else if (companyName.includes(normalizedKeyword)) score += 25;
+
+  if (unit === normalizedKeyword) score += 20;
+
+  if (selectedCompanyId && item.companyId === selectedCompanyId) {
+    score += 10;
+  }
+
+  return score;
+}
+
 export function StockPage() {
+  const searchParams = useSearchParams();
+  const view = searchParams.get('view');
+  const showAllCompanyAlerts = view === 'alerts';
+  const currentStockSectionRef = useRef<HTMLDivElement | null>(null);
+  const alertsSectionRef = useRef<HTMLDivElement | null>(null);
+  const lowStockSectionRef = useRef<HTMLDivElement | null>(null);
+  const zeroStockSectionRef = useRef<HTMLDivElement | null>(null);
+  const hasAutoScrolledRef = useRef(false);
+  const latestAutoMatchRequestRef = useRef(0);
+  const selectedCompanyIdRef = useRef<number | null>(null);
+  const selectedProductIdRef = useRef<number | null>(null);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [summary, setSummary] = useState<StockSummaryItem[]>([]);
@@ -54,6 +111,23 @@ export function StockPage() {
   const [isSubmitting, setIsSubmitting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useToastNotification({
+    message: error,
+    title: 'Could not load stock data',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: formError,
+    title: 'Could not save stock movement',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: successMessage,
+    title: 'Saved',
+    tone: 'success',
+  });
 
   useEffect(() => {
     async function loadCompaniesList() {
@@ -62,7 +136,10 @@ export function StockPage() {
         setError(null);
         const companyData = await getCompanies();
         setCompanies(companyData);
-        setSelectedCompanyId(companyData[0]?.id ?? null);
+        setSelectedCompanyId(
+          showAllCompanyAlerts ? null : (companyData[0]?.id ?? null),
+        );
+        setSelectedProductId(null);
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -75,24 +152,20 @@ export function StockPage() {
     }
 
     void loadCompaniesList();
-  }, []);
+  }, [showAllCompanyAlerts]);
 
   useEffect(() => {
     async function loadCompanyData() {
-      if (!selectedCompanyId) {
-        return;
-      }
-
       try {
         setIsLoading(true);
         setError(null);
 
         const [productData, summaryData, lowStockData, zeroStockData] =
           await Promise.all([
-            getProducts(selectedCompanyId),
-            getStockSummary(selectedCompanyId, searchTerm),
-            getLowStockProducts(selectedCompanyId, 10, searchTerm),
-            getZeroStockProducts(selectedCompanyId, searchTerm),
+            selectedCompanyId ? getProducts(selectedCompanyId) : Promise.resolve([]),
+            getStockSummary(selectedCompanyId ?? undefined, searchTerm),
+            getLowStockProducts(selectedCompanyId ?? undefined, 10, searchTerm),
+            getZeroStockProducts(selectedCompanyId ?? undefined, searchTerm),
           ]);
 
         setProducts(productData);
@@ -100,21 +173,50 @@ export function StockPage() {
         setLowStock(lowStockData);
         setZeroStock(zeroStockData);
 
-        const nextProductId = selectedProductId ?? productData[0]?.id ?? null;
+        const nextProductId =
+          selectedCompanyId &&
+          selectedProductId &&
+          productData.some((product) => product.id === selectedProductId)
+            ? selectedProductId
+            : null;
         setSelectedProductId(nextProductId);
 
-        const movementData = await getStockMovements(
-          selectedCompanyId,
-          nextProductId ?? undefined,
-        );
-        setMovements(movementData);
+        if (selectedCompanyId) {
+          const movementData = await getStockMovements(
+            selectedCompanyId,
+            nextProductId ?? undefined,
+          );
+          setMovements(movementData);
+        } else {
+          setMovements([]);
+        }
 
-        const defaultProductValue = nextProductId ? String(nextProductId) : '';
-        setOpeningForm((current) => ({ ...current, productId: defaultProductValue }));
-        setStockInForm((current) => ({ ...current, productId: defaultProductValue }));
+        const getDefaultFormProductValue = (currentProductId: string) => {
+          if (
+            currentProductId &&
+            productData.some((product) => product.id === Number(currentProductId))
+          ) {
+            return currentProductId;
+          }
+
+          if (nextProductId) {
+            return String(nextProductId);
+          }
+
+          return productData[0] ? String(productData[0].id) : '';
+        };
+
+        setOpeningForm((current) => ({
+          ...current,
+          productId: getDefaultFormProductValue(current.productId),
+        }));
+        setStockInForm((current) => ({
+          ...current,
+          productId: getDefaultFormProductValue(current.productId),
+        }));
         setAdjustmentForm((current) => ({
           ...current,
-          productId: defaultProductValue,
+          productId: getDefaultFormProductValue(current.productId),
         }));
       } catch (loadError) {
         setError(
@@ -131,6 +233,7 @@ export function StockPage() {
   useEffect(() => {
     async function loadMovements() {
       if (!selectedCompanyId) {
+        setMovements([]);
         return;
       }
 
@@ -151,6 +254,96 @@ export function StockPage() {
 
     void loadMovements();
   }, [selectedCompanyId, selectedProductId]);
+
+  useEffect(() => {
+    selectedCompanyIdRef.current = selectedCompanyId;
+    selectedProductIdRef.current = selectedProductId;
+  }, [selectedCompanyId, selectedProductId]);
+
+  useEffect(() => {
+    async function autoSelectMatchedStock() {
+      const trimmedSearch = searchTerm.trim();
+
+      if (trimmedSearch.length < 2) {
+        latestAutoMatchRequestRef.current += 1;
+        return;
+      }
+
+      const requestId = latestAutoMatchRequestRef.current + 1;
+      latestAutoMatchRequestRef.current = requestId;
+
+      try {
+        const matchedItems = await getStockSummary(undefined, trimmedSearch);
+
+        if (requestId !== latestAutoMatchRequestRef.current) {
+          return;
+        }
+
+        const rankedItems = [...matchedItems]
+          .map((item) => ({
+            item,
+            score: getStockMatchScore(
+              item,
+              trimmedSearch,
+              selectedCompanyIdRef.current,
+            ),
+          }))
+          .filter((entry) => entry.score > 0)
+          .sort((left, right) => right.score - left.score);
+
+        const bestMatch = rankedItems[0]?.item;
+
+        if (!bestMatch) {
+          return;
+        }
+
+        if (
+          bestMatch.companyId === selectedCompanyIdRef.current &&
+          bestMatch.productId === selectedProductIdRef.current
+        ) {
+          return;
+        }
+
+        setSummaryPage(1);
+        setLowStockPage(1);
+        setZeroStockPage(1);
+        setMovementPage(1);
+        setSelectedCompanyId(bestMatch.companyId);
+        setSelectedProductId(bestMatch.productId);
+      } catch {
+        // Keep manual filters unchanged if auto-match lookup fails.
+      }
+    }
+
+    void autoSelectMatchedStock();
+  }, [searchTerm]);
+
+  useEffect(() => {
+    if (isLoading || error || hasAutoScrolledRef.current) {
+      return;
+    }
+
+    const targetSection =
+      view === 'company' || view === 'current-stock'
+        ? currentStockSectionRef.current
+        : view === 'low-stock'
+          ? lowStockSectionRef.current
+          : view === 'zero-stock'
+            ? zeroStockSectionRef.current
+            : view === 'alerts'
+              ? alertsSectionRef.current
+              : null;
+
+    if (!targetSection) {
+      return;
+    }
+
+    targetSection.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+    hasAutoScrolledRef.current = true;
+  }, [error, isLoading, view]);
 
   const selectedCompany = useMemo(
     () => companies.find((company) => company.id === selectedCompanyId) ?? null,
@@ -196,10 +389,39 @@ export function StockPage() {
     return filteredZeroStock.slice(startIndex, startIndex + stockTablePageSize);
   }, [filteredZeroStock, zeroStockPage]);
 
+  const todaysMovements = useMemo(() => {
+    const today = new Date();
+
+    return movements.filter((movement) => {
+      const movementDate = new Date(movement.movementDate);
+
+      return (
+        movementDate.getFullYear() === today.getFullYear() &&
+        movementDate.getMonth() === today.getMonth() &&
+        movementDate.getDate() === today.getDate()
+      );
+    });
+  }, [movements]);
+
   const paginatedMovements = useMemo(() => {
     const startIndex = (movementPage - 1) * movementPageSize;
-    return movements.slice(startIndex, startIndex + movementPageSize);
-  }, [movementPage, movements]);
+    return todaysMovements.slice(startIndex, startIndex + movementPageSize);
+  }, [movementPage, todaysMovements]);
+
+  const allMovementsHref = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (selectedCompanyId) {
+      params.set('companyId', String(selectedCompanyId));
+    }
+
+    if (selectedProductId) {
+      params.set('productId', String(selectedProductId));
+    }
+
+    const queryString = params.toString();
+    return queryString ? `/stock/movements?${queryString}` : '/stock/movements';
+  }, [selectedCompanyId, selectedProductId]);
 
   async function refreshStockData(companyId: number, productId: number | null) {
     const [summaryData, lowStockData, zeroStockData, movementData] =
@@ -216,12 +438,32 @@ export function StockPage() {
     setMovements(movementData);
   }
 
+  function scrollToSection(section: HTMLDivElement | null) {
+    section?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }
+
+  function scrollToLowStockSection() {
+    scrollToSection(lowStockSectionRef.current);
+  }
+
+  function scrollToCurrentStockSection() {
+    scrollToSection(currentStockSectionRef.current);
+  }
+
+  function scrollToZeroStockSection() {
+    scrollToSection(zeroStockSectionRef.current);
+  }
+
   async function submitMovement(
     event: FormEvent<HTMLFormElement>,
     mode: 'opening' | 'stock-in' | 'adjustment',
   ) {
     event.preventDefault();
     setFormError(null);
+    setSuccessMessage(null);
 
     if (!selectedCompanyId) {
       setFormError('Please select a company first.');
@@ -254,15 +496,18 @@ export function StockPage() {
       if (mode === 'opening') {
         await addOpeningStock(payload);
         setOpeningForm((current) => ({ ...initialMovementForm, productId: current.productId }));
+        setSuccessMessage('Opening stock added successfully.');
       } else if (mode === 'stock-in') {
         await addStockIn(payload);
         setStockInForm((current) => ({ ...initialMovementForm, productId: current.productId }));
+        setSuccessMessage('Stock-in movement added successfully.');
       } else {
         await addAdjustment(payload);
         setAdjustmentForm((current) => ({
           ...initialMovementForm,
           productId: current.productId,
         }));
+        setSuccessMessage('Stock adjustment saved successfully.');
       }
 
       await refreshStockData(selectedCompanyId, selectedProductId);
@@ -292,7 +537,7 @@ export function StockPage() {
                 setZeroStockPage(1);
                 setSearchTerm(event.target.value);
               }}
-              placeholder="Search by product name or SKU"
+              placeholder="Search by product, SKU, unit, or company"
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
             />
             <select
@@ -303,10 +548,13 @@ export function StockPage() {
                 setLowStockPage(1);
                 setZeroStockPage(1);
                 setMovementPage(1);
-                setSelectedCompanyId(Number(event.target.value));
+                setSelectedCompanyId(
+                  event.target.value ? Number(event.target.value) : null,
+                );
               }}
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
             >
+              <option value="">All companies</option>
               {companies.map((company) => (
                 <option key={company.id} value={company.id}>
                   {company.name}
@@ -327,6 +575,7 @@ export function StockPage() {
                 }
               }
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
+              disabled={!selectedCompanyId}
             >
               <option value="">All products</option>
               {products.map((product) => (
@@ -339,166 +588,186 @@ export function StockPage() {
         }
       >
         {isLoading ? <LoadingBlock label="Loading stock workspace..." /> : null}
-        {error ? (
-          <StateMessage
-            tone="error"
-            title="Could not load stock data"
-            description={error}
-          />
-        ) : null}
         {!isLoading && !error ? (
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="rounded-2xl bg-slate-900 p-5 text-white">
+            <button
+              type="button"
+              onClick={scrollToCurrentStockSection}
+              className="rounded-2xl bg-slate-900 p-5 text-left text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
               <p className="text-sm text-slate-300">Selected company</p>
               <p className="mt-2 text-xl font-semibold">
-                {selectedCompany?.name ?? 'None'}
+                {selectedCompany?.name ?? 'All companies'}
               </p>
-            </div>
-            <div className="rounded-2xl bg-amber-50 p-5 text-amber-900">
+              <p className="mt-2 text-xs font-medium text-slate-300/80">
+                Click to view the current stock summary
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={scrollToLowStockSection}
+              className="rounded-2xl bg-amber-50 p-5 text-left text-amber-900 transition hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-300"
+            >
               <p className="text-sm">Low stock products</p>
-              <p className="mt-2 text-3xl font-semibold">{lowStock.length}</p>
-            </div>
-            <div className="rounded-2xl bg-rose-50 p-5 text-rose-900">
+              <p className="mt-2 text-3xl font-semibold">
+                {filteredLowStock.length}
+              </p>
+              <p className="mt-2 text-xs font-medium text-amber-800/80">
+                Click to view the low stock list
+              </p>
+            </button>
+            <button
+              type="button"
+              onClick={scrollToZeroStockSection}
+              className="rounded-2xl bg-rose-50 p-5 text-left text-rose-900 transition hover:bg-rose-100 focus:outline-none focus:ring-2 focus:ring-rose-300"
+            >
               <p className="text-sm">Zero stock products</p>
-              <p className="mt-2 text-3xl font-semibold">{zeroStock.length}</p>
-            </div>
+              <p className="mt-2 text-3xl font-semibold">
+                {filteredZeroStock.length}
+              </p>
+              <p className="mt-2 text-xs font-medium text-rose-800/80">
+                Click to view the zero stock list
+              </p>
+            </button>
           </div>
         ) : null}
       </PageCard>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <PageCard title="Add Opening Stock" description="Creates an OPENING movement.">
-          <MovementForm
-            products={products}
-            form={openingForm}
-            setForm={setOpeningForm}
-            submitLabel={isSubmitting === 'opening' ? 'Saving...' : 'Add opening stock'}
-            onSubmit={(event) => void submitMovement(event, 'opening')}
-          />
+          {selectedCompanyId ? (
+            <MovementForm
+              products={products}
+              form={openingForm}
+              setForm={setOpeningForm}
+              submitLabel={isSubmitting === 'opening' ? 'Saving...' : 'Add opening stock'}
+              onSubmit={(event) => void submitMovement(event, 'opening')}
+            />
+          ) : (
+            <StateMessage
+              title="Select a company first"
+              description="Choose a specific company to add opening stock."
+            />
+          )}
         </PageCard>
 
         <PageCard title="Add Stock In" description="Creates a STOCK_IN movement.">
-          <MovementForm
-            products={products}
-            form={stockInForm}
-            setForm={setStockInForm}
-            submitLabel={isSubmitting === 'stock-in' ? 'Saving...' : 'Add stock in'}
-            onSubmit={(event) => void submitMovement(event, 'stock-in')}
-          />
+          {selectedCompanyId ? (
+            <MovementForm
+              products={products}
+              form={stockInForm}
+              setForm={setStockInForm}
+              submitLabel={isSubmitting === 'stock-in' ? 'Saving...' : 'Add stock in'}
+              onSubmit={(event) => void submitMovement(event, 'stock-in')}
+            />
+          ) : (
+            <StateMessage
+              title="Select a company first"
+              description="Choose a specific company to add stock in."
+            />
+          )}
         </PageCard>
 
         <PageCard
           title="Add Adjustment"
           description="Creates an ADJUSTMENT movement. Use negative values to reduce stock."
         >
-          <MovementForm
-            products={products}
-            form={adjustmentForm}
-            setForm={setAdjustmentForm}
-            submitLabel={isSubmitting === 'adjustment' ? 'Saving...' : 'Add adjustment'}
-            onSubmit={(event) => void submitMovement(event, 'adjustment')}
-          />
+          {selectedCompanyId ? (
+            <MovementForm
+              products={products}
+              form={adjustmentForm}
+              setForm={setAdjustmentForm}
+              submitLabel={isSubmitting === 'adjustment' ? 'Saving...' : 'Add adjustment'}
+              onSubmit={(event) => void submitMovement(event, 'adjustment')}
+            />
+          ) : (
+            <StateMessage
+              title="Select a company first"
+              description="Choose a specific company to save stock adjustments."
+            />
+          )}
         </PageCard>
       </div>
 
-      {formError ? (
-        <StateMessage
-          tone="error"
-          title="Could not save stock movement"
-          description={formError}
-        />
-      ) : null}
-
       <div className="grid gap-6 xl:grid-cols-2">
-        <PageCard
-          title="Current Stock Summary"
-          description="This is calculated from stock movements, so it is the best place to verify current balances."
-        >
-          <StockSummaryTable items={paginatedSummary} />
-          <Pagination
-            currentPage={summaryPage}
-            totalItems={filteredSummary.length}
-            pageSize={stockTablePageSize}
-            onPageChange={setSummaryPage}
-          />
-        </PageCard>
+        <div ref={currentStockSectionRef}>
+          <PageCard
+            title="Current Stock Summary"
+            description="This is calculated from stock movements, so it is the best place to verify current balances."
+          >
+            <StockSummaryTable items={paginatedSummary} />
+            <Pagination
+              currentPage={summaryPage}
+              totalItems={filteredSummary.length}
+              pageSize={stockTablePageSize}
+              onPageChange={setSummaryPage}
+            />
+          </PageCard>
+        </div>
 
         <PageCard
-          title="Stock Movement History"
-          description="Review individual movement entries for the selected company and optional product filter."
-        >
-          <div className="space-y-3">
-            {paginatedMovements.map((movement) => (
-              <div
-                key={movement.id}
-                className="rounded-2xl border border-slate-200 bg-slate-50 p-4"
+          title="Today's Stock Movement History"
+          description="This section shows only today's movement entries for the selected company and optional product filter."
+          action={
+            selectedCompanyId ? (
+              <Link
+                href={allMovementsHref}
+                className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <p className="font-semibold text-slate-900">
-                      {movement.product?.name ?? `Product #${movement.productId}`}
-                    </p>
-                    <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
-                      {movement.type}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-semibold text-slate-900">
-                      {formatNumber(movement.quantity)}{' '}
-                      {movement.product?.unit ?? ''}
-                    </p>
-                    <p className="text-xs text-slate-500">
-                      {formatDate(movement.movementDate)}
-                    </p>
-                  </div>
-                </div>
-                <p className="mt-3 text-sm text-slate-600">
-                  {movement.note || 'No note provided.'}
-                </p>
-              </div>
-            ))}
-            {movements.length === 0 ? (
-              <StateMessage
-                title="No stock movements found"
-                description="Create opening stock or stock-in entries to see movement history here."
-              />
-            ) : null}
-            <Pagination
+                View all movements
+              </Link>
+            ) : null
+          }
+        >
+          {selectedCompanyId ? (
+            <StockMovementList
+              movements={paginatedMovements}
+              totalItems={todaysMovements.length}
               currentPage={movementPage}
-              totalItems={movements.length}
               pageSize={movementPageSize}
               onPageChange={setMovementPage}
+              emptyTitle="No stock movements found today"
+              emptyDescription="Today's entries will appear here. Open all movements to review older stock history."
             />
-          </div>
+          ) : (
+            <StateMessage
+              title="Select a company to review movements"
+              description="All-company mode is useful for low and zero stock lists. Pick a company to inspect movement history."
+            />
+          )}
         </PageCard>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <PageCard
-          title="Low Stock Products"
-          description="Products with current stock above zero and at or below the backend threshold."
-        >
-          <StockSummaryTable items={paginatedLowStock} />
-          <Pagination
-            currentPage={lowStockPage}
-            totalItems={filteredLowStock.length}
-            pageSize={stockTablePageSize}
-            onPageChange={setLowStockPage}
-          />
-        </PageCard>
+      <div ref={alertsSectionRef} className="grid gap-6 xl:grid-cols-2">
+        <div ref={lowStockSectionRef}>
+          <PageCard
+            title="Low Stock Products"
+            description="Products with current stock above zero and at or below the backend threshold."
+          >
+            <StockSummaryTable items={paginatedLowStock} />
+            <Pagination
+              currentPage={lowStockPage}
+              totalItems={filteredLowStock.length}
+              pageSize={stockTablePageSize}
+              onPageChange={setLowStockPage}
+            />
+          </PageCard>
+        </div>
 
-        <PageCard
-          title="Zero Stock Products"
-          description="Products currently calculated as zero stock from stock movements."
-        >
-          <StockSummaryTable items={paginatedZeroStock} />
-          <Pagination
-            currentPage={zeroStockPage}
-            totalItems={filteredZeroStock.length}
-            pageSize={stockTablePageSize}
-            onPageChange={setZeroStockPage}
-          />
-        </PageCard>
+        <div ref={zeroStockSectionRef}>
+          <PageCard
+            title="Zero Stock Products"
+            description="Products currently calculated as zero stock from stock movements."
+          >
+            <StockSummaryTable items={paginatedZeroStock} />
+            <Pagination
+              currentPage={zeroStockPage}
+              totalItems={filteredZeroStock.length}
+              pageSize={stockTablePageSize}
+              onPageChange={setZeroStockPage}
+            />
+          </PageCard>
+        </div>
       </div>
     </div>
   );

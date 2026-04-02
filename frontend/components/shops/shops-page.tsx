@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { getRoutes } from '@/lib/api/routes';
 import { createShop, getShops, updateShop } from '@/lib/api/shops';
@@ -7,6 +8,8 @@ import { LoadingBlock } from '@/components/ui/loading-block';
 import { PageCard } from '@/components/ui/page-card';
 import { Pagination } from '@/components/ui/pagination';
 import { StateMessage } from '@/components/ui/state-message';
+import { useToastNotification } from '@/components/ui/toast-provider';
+import { formatCurrency } from '@/lib/utils/format';
 import type { Route, Shop } from '@/types/api';
 
 const shopsPageSize = 12;
@@ -32,6 +35,22 @@ export function ShopsPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useToastNotification({
+    message: error,
+    title: 'Could not load shops',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: formError,
+    title: 'Could not save shop',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: successMessage,
+    title: 'Saved',
+    tone: 'success',
+  });
 
   useEffect(() => {
     async function loadInitialData() {
@@ -95,6 +114,17 @@ export function ShopsPage() {
     const startIndex = (currentPage - 1) * shopsPageSize;
     return shops.slice(startIndex, startIndex + shopsPageSize);
   }, [currentPage, shops]);
+
+  const shopSummary = useMemo(
+    () => ({
+      totalOrders: shops.reduce(
+        (sum, shop) => sum + (shop.totalOrders ?? 0),
+        0,
+      ),
+      totalDue: shops.reduce((sum, shop) => sum + (shop.totalDue ?? 0), 0),
+    }),
+    [shops],
+  );
 
   async function refreshShops() {
     const shopData = await getShops(selectedRouteId ?? undefined, searchTerm);
@@ -183,18 +213,39 @@ export function ShopsPage() {
         }
       >
         {isLoading ? <LoadingBlock label="Loading shops..." /> : null}
-        {error ? (
-          <StateMessage tone="error" title="Could not load shops" description={error} />
-        ) : null}
         {!isLoading && !error ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
+          <div>
+            <div className="mb-4 grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl bg-slate-50 p-4">
+                <p className="text-sm text-slate-500">Displayed shops</p>
+                <p className="mt-2 text-2xl font-semibold text-slate-900">
+                  {shops.length}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-cyan-50 p-4 text-cyan-900">
+                <p className="text-sm">Total orders</p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {shopSummary.totalOrders}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 p-4 text-amber-900">
+                <p className="text-sm">Total due</p>
+                <p className="mt-2 text-2xl font-semibold">
+                  {formatCurrency(shopSummary.totalDue)}
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead>
                 <tr className="text-left text-slate-500">
                   <th className="px-3 py-3 font-medium">Shop</th>
                   <th className="px-3 py-3 font-medium">Route</th>
                   <th className="px-3 py-3 font-medium">Owner</th>
                   <th className="px-3 py-3 font-medium">Phone</th>
+                  <th className="px-3 py-3 font-medium">Total orders</th>
+                  <th className="px-3 py-3 font-medium">Total due</th>
                   <th className="px-3 py-3 font-medium">Address</th>
                   <th className="px-3 py-3 font-medium">Status</th>
                   <th className="px-3 py-3 font-medium">Action</th>
@@ -209,6 +260,12 @@ export function ShopsPage() {
                     </td>
                     <td className="px-3 py-4 text-slate-700">{shop.ownerName || 'No owner'}</td>
                     <td className="px-3 py-4 text-slate-700">{shop.phone || 'No phone'}</td>
+                    <td className="px-3 py-4 text-slate-700">
+                      {shop.totalOrders ?? 0}
+                    </td>
+                    <td className="px-3 py-4 font-medium text-amber-700">
+                      {formatCurrency(shop.totalDue ?? 0)}
+                    </td>
                     <td className="px-3 py-4 text-slate-700">{shop.address || 'No address'}</td>
                     <td className="px-3 py-4">
                       <span
@@ -222,13 +279,21 @@ export function ShopsPage() {
                       </span>
                     </td>
                     <td className="px-3 py-4">
-                      <button
-                        type="button"
-                        onClick={() => setEditingShop(shop)}
-                        className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        Edit
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingShop(shop)}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Edit
+                        </button>
+                        <Link
+                          href={`/sales/shops/${shop.id}`}
+                          className="rounded-xl border border-slate-200 px-3 py-2 text-center text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Due ledger
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -242,12 +307,13 @@ export function ShopsPage() {
                 />
               </div>
             ) : null}
-            <Pagination
-              currentPage={currentPage}
-              totalItems={shops.length}
-              pageSize={shopsPageSize}
-              onPageChange={setCurrentPage}
-            />
+              <Pagination
+                currentPage={currentPage}
+                totalItems={shops.length}
+                pageSize={shopsPageSize}
+                onPageChange={setCurrentPage}
+              />
+            </div>
           </div>
         ) : null}
       </PageCard>
@@ -347,14 +413,6 @@ export function ShopsPage() {
           <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
             If you are adding many shops under the same route, choose the route once and keep adding. The route stays selected after each save.
           </div>
-
-          {successMessage ? (
-            <StateMessage title="Saved" description={successMessage} />
-          ) : null}
-
-          {formError ? (
-            <StateMessage tone="error" title="Could not save shop" description={formError} />
-          ) : null}
 
           <div className="flex gap-3">
             <button

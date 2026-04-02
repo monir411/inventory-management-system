@@ -9,6 +9,7 @@ import { LoadingBlock } from '@/components/ui/loading-block';
 import { PageCard } from '@/components/ui/page-card';
 import { Pagination } from '@/components/ui/pagination';
 import { StateMessage } from '@/components/ui/state-message';
+import { useToastNotification } from '@/components/ui/toast-provider';
 import { formatCurrency, formatNumber } from '@/lib/utils/format';
 import type { Company, Product } from '@/types/api';
 
@@ -21,6 +22,12 @@ export function AllProductsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useToastNotification({
+    message: error,
+    title: 'Could not load all products',
+    tone: 'error',
+  });
 
   useEffect(() => {
     async function loadProducts() {
@@ -86,16 +93,16 @@ export function AllProductsPage() {
       }
     >
       {isLoading ? <LoadingBlock label="Loading all products..." /> : null}
-      {error ? (
-        <StateMessage
-          tone="error"
-          title="Could not load all products"
-          description={error}
-        />
-      ) : null}
 
       {!isLoading && !error ? (
         <>
+          <div className="mb-4 flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            <span className="font-medium text-slate-900">Total Products</span>
+            <span className="rounded-full bg-cyan-100 px-3 py-1 font-semibold text-cyan-900">
+              {products.length}
+            </span>
+          </div>
+
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
               <thead>
@@ -111,23 +118,49 @@ export function AllProductsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {paginatedProducts.map((product) => (
-                  <tr key={product.id} className="align-top text-slate-700">
+                {paginatedProducts.map((product) => {
+                  const currentStock = stockByProductId[product.id] ?? 0;
+
+                  return (
+                  <tr
+                    key={product.id}
+                    className={`align-top ${
+                      currentStock === 0
+                        ? 'bg-rose-50 text-rose-900'
+                        : 'text-slate-700'
+                    }`}
+                  >
                     <td className="px-3 py-4">
-                      <div className="font-medium text-slate-900">
+                      <div
+                        className={`font-medium ${
+                          currentStock === 0 ? 'text-rose-900' : 'text-slate-900'
+                        }`}
+                      >
                         {product.company?.name ?? `Company #${product.companyId}`}
                       </div>
-                      <div className="text-xs text-slate-500">
+                      <div
+                        className={`text-xs ${
+                          currentStock === 0 ? 'text-rose-700' : 'text-slate-500'
+                        }`}
+                      >
                         {product.company?.code ?? ''}
                       </div>
                     </td>
-                    <td className="px-3 py-4 font-medium text-slate-900">
+                    <td
+                      className={`px-3 py-4 font-medium ${
+                        currentStock === 0 ? 'text-rose-900' : 'text-slate-900'
+                      }`}
+                    >
                       {product.name}
                     </td>
                     <td className="px-3 py-4 font-mono text-xs">{product.sku}</td>
                     <td className="px-3 py-4">{product.unit}</td>
-                    <td className="px-3 py-4 font-medium text-slate-900">
-                      {formatNumber(stockByProductId[product.id] ?? 0)}
+                    <td
+                      className={`px-3 py-4 font-medium ${
+                        currentStock === 0 ? 'text-rose-600' : 'text-slate-900'
+                      }`}
+                    >
+                      {formatNumber(currentStock)}
                     </td>
                     <td className="px-3 py-4">{formatCurrency(product.buyPrice)}</td>
                     <td className="px-3 py-4">{formatCurrency(product.salePrice)}</td>
@@ -143,7 +176,8 @@ export function AllProductsPage() {
                       </span>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

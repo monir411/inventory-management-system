@@ -6,6 +6,7 @@ import { LoadingBlock } from '@/components/ui/loading-block';
 import { PageCard } from '@/components/ui/page-card';
 import { Pagination } from '@/components/ui/pagination';
 import { StateMessage } from '@/components/ui/state-message';
+import { useToastNotification } from '@/components/ui/toast-provider';
 import type { Route } from '@/types/api';
 
 const routesPageSize = 10;
@@ -26,6 +27,22 @@ export function RoutesPage() {
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  useToastNotification({
+    message: error,
+    title: 'Could not load routes',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: formError,
+    title: 'Could not save route',
+    tone: 'error',
+  });
+  useToastNotification({
+    message: successMessage,
+    title: 'Saved',
+    tone: 'success',
+  });
 
   useEffect(() => {
     async function loadRoutes() {
@@ -122,9 +139,6 @@ export function RoutesPage() {
         }
       >
         {isLoading ? <LoadingBlock label="Loading routes..." /> : null}
-        {error ? (
-          <StateMessage tone="error" title="Could not load routes" description={error} />
-        ) : null}
         {!isLoading && !error ? (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -229,14 +243,6 @@ export function RoutesPage() {
           <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4 text-sm text-cyan-900">
             Add routes one after another here. After each save, the form resets so you can continue entering the next route quickly.
           </div>
-
-          {successMessage ? (
-            <StateMessage title="Saved" description={successMessage} />
-          ) : null}
-
-          {formError ? (
-            <StateMessage tone="error" title="Could not save route" description={formError} />
-          ) : null}
 
           <div className="flex gap-3">
             <button
