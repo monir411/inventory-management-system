@@ -180,6 +180,112 @@ export type CreateShopPayload = {
 
 export type UpdateShopPayload = Partial<CreateShopPayload>;
 
+export type Purchase = {
+  id: number;
+  companyId: number;
+  purchaseDate: string;
+  referenceNo: string | null;
+  totalAmount: number;
+  paidAmount: number;
+  payableAmount: number;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  company?: Company;
+  items?: PurchaseItem[];
+  payments?: PurchasePayment[];
+};
+
+export type PurchaseItem = {
+  id: number;
+  purchaseId: number;
+  productId: number;
+  quantity: number;
+  unitCost: number;
+  lineTotal: number;
+  createdAt: string;
+  updatedAt: string;
+  product?: Product;
+};
+
+export type PurchasePayment = {
+  id: number;
+  purchaseId: number;
+  amount: number;
+  paymentDate: string;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CreatePurchaseItemPayload = {
+  productId: number;
+  quantity: number;
+  unitCost: number;
+};
+
+export type CreatePurchasePayload = {
+  companyId: number;
+  purchaseDate: string;
+  referenceNo?: string;
+  note?: string;
+  items: CreatePurchaseItemPayload[];
+};
+
+export type ReceivePurchasePaymentPayload = {
+  amount: number;
+  paymentDate: string;
+  note?: string;
+};
+
+export type PurchaseQuery = {
+  companyId?: number;
+  fromDate?: string;
+  toDate?: string;
+  search?: string;
+};
+
+export type CompanyWisePayableSummary = {
+  companyId: number;
+  companyName: string;
+  companyCode: string;
+  purchaseCount: number;
+  payablePurchaseCount: number;
+  totalAmount: number;
+  totalPaid: number;
+  totalPayable: number;
+  lastPurchaseDate: string | null;
+};
+
+export type CompanyPayableHistoryEntry = {
+  id: number;
+  purchaseId: number;
+  amount: number;
+  paymentDate: string;
+  note: string | null;
+  referenceNo: string | null;
+  purchaseTotalAmount: number;
+  purchasePaidAmount: number;
+  purchasePayableAmount: number;
+  companyId: number;
+  companyName: string;
+  companyCode: string;
+};
+
+export type CompanyPayableLedger = {
+  company: Company;
+  summary: {
+    purchaseCount: number;
+    payablePurchaseCount: number;
+    totalAmount: number;
+    totalPaid: number;
+    totalPayable: number;
+    lastPurchaseDate: string | null;
+  };
+  payablePurchases: Purchase[];
+  paymentHistory: CompanyPayableHistoryEntry[];
+};
+
 export type Sale = {
   id: number;
   companyId: number;

@@ -5,7 +5,7 @@ export function Topbar() {
         <div>
           <p className="text-sm font-medium text-cyan-700">Backend-connected frontend</p>
           <h2 className="text-xl font-semibold text-slate-900">
-            Inventory testing workspace
+            Operations testing workspace
           </h2>
         </div>
         <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">

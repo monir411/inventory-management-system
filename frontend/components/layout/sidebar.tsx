@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const navigation = [
   { href: '/', label: 'Dashboard' },
   { href: '/sales', label: 'Sales' },
+  { href: '/purchases', label: 'Purchases' },
   { href: '/products/all', label: 'All Products' }, 
   { href: '/products', label: 'Products' },
   { href: '/stock', label: 'Stock' },
@@ -27,7 +28,7 @@ export function Sidebar() {
           Admin Workspace
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          Companies, products, stock, routes, shops, and sales connected to the backend API.
+          Companies, products, purchases, stock, routes, shops, and sales connected to the backend API.
         </p>
       </div>
 
