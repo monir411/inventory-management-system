@@ -5,9 +5,11 @@ import {
   useMemo,
   useRef,
   useState,
+  useEffect,
   type ReactNode,
   useCallback,
 } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useCompanies, useRoutes, useShops } from '@/hooks/use-common-queries';
 import {
   useSalesList,
@@ -24,7 +26,8 @@ import {
 import { PageCard } from '@/components/ui/page-card';
 import { Pagination } from '@/components/ui/pagination';
 import { StateMessage } from '@/components/ui/state-message';
-import { useToastNotification } from '@/components/ui/toast-provider';
+import { useToast, useToastNotification } from '@/components/ui/toast-provider';
+import { deleteSale } from '@/lib/api/sales';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
 import type { Sale } from '@/types/api';
 
@@ -45,23 +48,55 @@ function getFilterDateTime(value: string, boundary: 'start' | 'end') {
 
 export function SalesPage() {
   const shopDueSectionRef = useRef<HTMLDivElement | null>(null);
+  const searchParams = useSearchParams();
 
   // Filter States
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
-  const [selectedRouteId, setSelectedRouteId] = useState<number | null>(null);
-  const [selectedShopId, setSelectedShopId] = useState<number | null>(null);
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [dueOnly, setDueOnly] = useState(false);
+  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(() => {
+    const cid = searchParams.get('companyId');
+    return cid ? Number(cid) : null;
+  });
+  const [selectedRouteId, setSelectedRouteId] = useState<number | null>(() => {
+    const rid = searchParams.get('routeId');
+    return rid ? Number(rid) : null;
+  });
+  const [selectedShopId, setSelectedShopId] = useState<number | null>(() => {
+    const sid = searchParams.get('shopId');
+    return sid ? Number(sid) : null;
+  });
+  const [fromDate, setFromDate] = useState(() => searchParams.get('fromDate') || '');
+  const [toDate, setToDate] = useState(() => searchParams.get('toDate') || '');
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get('search') || '');
+  const [dueOnly, setDueOnly] = useState(() => searchParams.get('dueOnly') === 'true');
 
   // Pagination States
-  const [salesPage, setSalesPage] = useState(1);
+  const [salesPage, setSalesPage] = useState(() => {
+    const p = searchParams.get('page');
+    return p ? Number(p) : 1;
+  });
   const [routeSummaryPage, setRouteSummaryPage] = useState(1);
   const [companySummaryPage, setCompanySummaryPage] = useState(1);
   const [routeDuePage, setRouteDuePage] = useState(1);
   const [shopDuePage, setShopDuePage] = useState(1);
   const [companyDuePage, setCompanyDuePage] = useState(1);
+
+  useEffect(() => {
+    const cid = searchParams.get('companyId');
+    setSelectedCompanyId(cid ? Number(cid) : null);
+    
+    const rid = searchParams.get('routeId');
+    setSelectedRouteId(rid ? Number(rid) : null);
+    
+    const sid = searchParams.get('shopId');
+    setSelectedShopId(sid ? Number(sid) : null);
+    
+    setFromDate(searchParams.get('fromDate') || '');
+    setToDate(searchParams.get('toDate') || '');
+    setSearchTerm(searchParams.get('search') || '');
+    setDueOnly(searchParams.get('dueOnly') === 'true');
+    
+    const p = searchParams.get('page');
+    setSalesPage(p ? Number(p) : 1);
+  }, [searchParams]);
 
   // Print Modal State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
@@ -218,7 +253,14 @@ export function SalesPage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_350px]">
         <div className="space-y-6">
           <PageCard title="Recent Sales" description="Recent transactions based on your filters.">
-            <SalesTable sales={sales} isFetching={isFetchingSales} />
+            <SalesTable 
+              sales={sales} 
+              isFetching={isFetchingSales} 
+              onDeleted={() => {
+                // Refresh queries using React Query if possible, or just force reload
+                window.location.reload();
+              }}
+            />
             <Pagination currentPage={salesPage} totalItems={salesTotalItems} pageSize={salesPageSize} onPageChange={setSalesPage} />
           </PageCard>
         </div>
@@ -275,7 +317,23 @@ function SummaryCard({ label, value, subValue, tone }: { label: string, value: s
   );
 }
 
-function SalesTable({ sales, isFetching }: { sales: Sale[], isFetching: boolean }) {
+function SalesTable({ sales, isFetching, onDeleted }: { sales: Sale[], isFetching: boolean, onDeleted: () => void }) {
+  const [isDeleting, setIsDeleting] = useState<number | null>(null);
+  const { error: showErrorToast } = useToast();
+
+  const handleDelete = async (id: number) => {
+    if (!window.confirm('Are you sure you want to delete this sale? This will reverse stock movements and payments.')) return;
+    setIsDeleting(id);
+    try {
+      await deleteSale(id);
+      onDeleted();
+    } catch (e) {
+      showErrorToast(e instanceof Error ? e.message : 'Failed to delete sale');
+    } finally {
+      setIsDeleting(null);
+    }
+  };
+
   return (
     <div className={`overflow-x-auto ${isFetching ? 'opacity-50' : ''}`}>
       <table className="w-full text-left">
@@ -285,7 +343,7 @@ function SalesTable({ sales, isFetching }: { sales: Sale[], isFetching: boolean 
             <th className="px-4 py-3">Customer / Route</th>
             <th className="px-4 py-3">Amount</th>
             <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Date</th>
+            <th className="px-4 py-3 text-right">Actions</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-50">
@@ -304,8 +362,38 @@ function SalesTable({ sales, isFetching }: { sales: Sale[], isFetching: boolean 
                 <span className={`px-2 py-1 rounded-full text-[10px] font-bold ${sale.dueAmount > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                   {sale.dueAmount > 0 ? `Due: ${formatCurrency(sale.dueAmount)}` : 'Paid'}
                 </span>
+                <p className="text-[10px] text-slate-500 mt-1">{formatDate(sale.saleDate)}</p>
               </td>
-              <td className="px-4 py-4 text-xs text-slate-500">{formatDate(sale.saleDate)}</td>
+              <td className="px-4 py-4 text-right">
+                <div className="flex justify-end gap-2">
+                  <Link 
+                    href={`/sales/${sale.id}/edit`}
+                    className="p-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors"
+                    title="Edit Sale"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </Link>
+                  <button 
+                    onClick={() => handleDelete(sale.id)}
+                    disabled={isDeleting === sale.id}
+                    className="p-2 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors disabled:opacity-50"
+                    title="Delete Sale"
+                  >
+                    {isDeleting === sale.id ? (
+                       <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                       </svg>
+                    ) : (
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>

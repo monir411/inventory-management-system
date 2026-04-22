@@ -6,14 +6,14 @@ import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import { getCompanies } from '@/lib/api/companies';
 import { getProducts } from '@/lib/api/products';
 import { getRoutes } from '@/lib/api/routes';
-import { createSale } from '@/lib/api/sales';
+import { createSale, getSale, updateSale } from '@/lib/api/sales';
 import { createShop, getShops } from '@/lib/api/shops';
 import { getStockSummary } from '@/lib/api/stock';
 import { LoadingBlock } from '@/components/ui/loading-block';
 import { useAuth } from '../auth/auth-provider';
 import { canViewProfit, canSeeBuyPrice } from '@/lib/utils/permissions';
 import { PageCard } from '@/components/ui/page-card';
-import { useToastNotification } from '@/components/ui/toast-provider';
+import { useToast, useToastNotification } from '@/components/ui/toast-provider';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/format';
 import type { Company, CreateShopPayload, Product, Route, Sale, Shop } from '@/types/api';
 
@@ -136,9 +136,10 @@ function getAdvancedProductMatches(products: Product[], keyword: string, limit =
   };
 }
 
-export function CreateSalePage() {
+export function CreateSalePage({ saleId }: { saleId?: string }) {
   const router = useRouter();
   const { user } = useAuth();
+  const { success: showSuccessToast } = useToast();
   const showProfit = canViewProfit(user);
   const showBuyPrice = canSeeBuyPrice(user);
 
@@ -161,17 +162,29 @@ export function CreateSalePage() {
     phone: '',
     address: '',
   });
-  const [saleDate, setSaleDate] = useState(new Date().toISOString().slice(0, 16));
+  const [saleDate, setSaleDate] = useState('');
+  useEffect(() => {
+    if (!saleId) {
+      const now = new Date();
+      const offset = now.getTimezoneOffset() * 60000;
+      setSaleDate(new Date(now.getTime() - offset).toISOString().slice(0, 16));
+    }
+  }, [saleId]);
   const [invoiceNo, setInvoiceNo] = useState('');
   const [paymentMode, setPaymentMode] = useState<PaymentMode>('full');
   const [invoiceDiscountType, setInvoiceDiscountType] = useState<'percentage' | 'fixed'>('percentage');
   const [invoiceDiscountValue, setInvoiceDiscountValue] = useState('');
   const [paidAmount, setPaidAmount] = useState('0.00');
   const [note, setNote] = useState('');
-  const [items, setItems] = useState<SaleItemForm[]>([initialItem()]);
+  const [items, setItems] = useState<SaleItemForm[]>([]);
+  
+  useEffect(() => {
+    setItems([initialItem()]);
+  }, []);
   const [activeProductSearchId, setActiveProductSearchId] = useState<string | null>(null);
   const [highlightedProductIndex, setHighlightedProductIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaleLoading, setIsSaleLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -185,12 +198,12 @@ export function CreateSalePage() {
   });
   useToastNotification({
     message: formError,
-    title: 'Could not create sale',
+    title: 'Error',
     tone: 'error',
   });
   useToastNotification({
     message: successMessage,
-    title: 'Sale created',
+    title: 'Success',
     tone: 'success',
   });
   useToastNotification({
@@ -203,6 +216,46 @@ export function CreateSalePage() {
     title: 'Shop created',
     tone: 'success',
   });
+
+  useEffect(() => {
+    async function loadSale() {
+      if (!saleId) return;
+      setIsSaleLoading(true);
+      try {
+        const sale = await getSale(Number(saleId));
+        setCompanyId(String(sale.companyId));
+        setRouteId(String(sale.routeId));
+        setShopId(String(sale.shopId || ''));
+        
+        const date = new Date(sale.saleDate);
+        const offset = date.getTimezoneOffset() * 60000;
+        setSaleDate(new Date(date.getTime() - offset).toISOString().slice(0, 16));
+        
+        setInvoiceNo(sale.invoiceNo);
+        setInvoiceDiscountType(sale.invoiceDiscountType === 'percentage' ? 'percentage' : 'fixed');
+        setInvoiceDiscountValue(String(sale.invoiceDiscountValue || ''));
+        setPaymentMode(sale.dueAmount > 0 ? 'due' : 'full');
+        setPaidAmount(String(sale.paidAmount));
+        setNote(sale.note || '');
+
+        setItems(sale.items.map(item => ({
+          id: String(item.id),
+          productId: String(item.productId),
+          productSearch: item.product?.name || '',
+          quantity: String(item.quantity),
+          unitPrice: String(item.unitPrice),
+          discountType: item.discountType === 'percentage' ? 'percentage' : 'fixed',
+          discountValue: String(item.discountValue || ''),
+          freeQuantity: String(item.freeQuantity || ''),
+        })));
+      } catch (e) {
+        setFormError('Failed to load sale data');
+      } finally {
+        setIsSaleLoading(false);
+      }
+    }
+    void loadSale();
+  }, [saleId]);
 
   useEffect(() => {
     async function loadReferenceData() {
@@ -218,8 +271,10 @@ export function CreateSalePage() {
         setCompanies(companyData);
         setRoutes(routeData);
         setAllProducts(productData);
-        setCompanyId(String(companyData[0]?.id ?? ''));
-        setRouteId(String(routeData[0]?.id ?? ''));
+        if (!saleId) {
+          setCompanyId(String(companyData[0]?.id ?? ''));
+          setRouteId(String(routeData[0]?.id ?? ''));
+        }
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -232,7 +287,7 @@ export function CreateSalePage() {
     }
 
     void loadReferenceData();
-  }, []);
+  }, [saleId]);
 
   useEffect(() => {
     async function loadCompanyProducts() {
@@ -552,6 +607,13 @@ export function CreateSalePage() {
         })),
       };
 
+      if (saleId) {
+        await updateSale(Number(saleId), payload);
+        showSuccessToast('Sale updated successfully');
+        router.push(`/sales/${saleId}`);
+        return;
+      }
+
       const sale = await createSale(payload);
 
       if (mode === 'next') {
@@ -644,20 +706,22 @@ export function CreateSalePage() {
   return (
     <div className="space-y-6">
       <PageCard
-        title="Create Sale"
-        description="Build a route-based sale with multiple products, live profit math, and due validation before submission."
+        title={saleId ? "Edit Order" : "New Order"}
+        description="Quickly create a route-based order. Orders are automatically added to the daily Delivery Summary."
         action={
           <Link
             href="/sales"
             className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
           >
-            Back to sales
+            Back to orders
           </Link>
         }
       >
-        {isLoading ? <LoadingBlock label="Loading sale form..." /> : null}
+        {isLoading || isSaleLoading ? (
+          <LoadingBlock label={isSaleLoading ? "Loading order data..." : "Loading sale form..."} />
+        ) : null}
 
-        {!isLoading && !error ? (
+        {!(isLoading || isSaleLoading) && !error ? (
           <form onSubmit={(event) => void handleSubmit(event)} className="space-y-6">
             <div className="rounded-3xl border border-slate-100 bg-gradient-to-r from-slate-50 to-white p-6 shadow-sm">
               <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -676,7 +740,7 @@ export function CreateSalePage() {
                       : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-emerald-600'
                       }`}
                   >
-                    Full paid sale
+                    Full paid order
                   </button>
                   <button
                     type="button"
@@ -686,19 +750,19 @@ export function CreateSalePage() {
                       : 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 hover:text-amber-600'
                       }`}
                   >
-                    Due sale
+                    Due order
                   </button>
                 </div>
               </div>
             </div>
 
-            <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.35fr)] xl:items-start">
+            <div className="grid gap-6 md:grid-cols-2 md:items-start">
               <div className="space-y-6">
                 <div className="rounded-3xl border border-slate-100 bg-white p-6 md:p-8 shadow-sm transition-all hover:shadow-md">
                   <div className="mb-8">
-                    <h3 className="text-2xl font-bold tracking-tight text-slate-900">Sale Details</h3>
+                    <h3 className="text-2xl font-bold tracking-tight text-slate-900">Order Details</h3>
                     <p className="mt-2 text-sm leading-relaxed text-slate-500">
-                      Choose company, route, shop, payment, and invoice settings before adding items.
+                      Orders are linked to the Delivery Summary for the same date and route automatically.
                     </p>
                   </div>
 
@@ -949,52 +1013,43 @@ export function CreateSalePage() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <div className="rounded-2xl bg-slate-900 p-5 text-white">
-                    <p className="text-sm text-slate-300">Total amount</p>
-                    <p className="mt-2 text-3xl font-semibold">
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="min-w-0 rounded-2xl bg-slate-900 p-4 text-white">
+                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Total amount</p>
+                    <p className="mt-1.5 break-words text-xl font-bold leading-tight">
                       {formatCurrency(totalAmount)}
                     </p>
                   </div>
                   {showProfit && (
-                    <div className="rounded-2xl bg-emerald-50 p-5 text-emerald-900">
-                      <p className="text-sm">Total profit</p>
-                      <p className="mt-2 text-3xl font-semibold">
+                    <div className="min-w-0 rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-emerald-900">
+                      <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Total profit</p>
+                      <p className="mt-1.5 break-words text-xl font-bold leading-tight">
                         {formatCurrency(totalProfit)}
                       </p>
                     </div>
                   )}
                   <div
-                    className={`rounded-2xl p-5 ${dueAmount > 0
-                      ? 'bg-amber-50 text-amber-900'
-                      : 'bg-emerald-50 text-emerald-900'
+                    className={`min-w-0 rounded-2xl border p-4 ${dueAmount > 0
+                      ? 'bg-amber-50 border-amber-100 text-amber-900'
+                      : 'bg-emerald-50 border-emerald-100 text-emerald-900'
                       }`}
                   >
-                    <p className="text-sm">Due amount</p>
-                    <p className="mt-2 text-3xl font-semibold">
+                    <p className={`text-xs font-medium uppercase tracking-wide ${dueAmount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>Due amount</p>
+                    <p className="mt-1.5 break-words text-xl font-bold leading-tight">
                       {formatCurrency(dueAmount)}
                     </p>
                     {invoiceDiscountAmount > 0 ? (
-                      <p className="mt-1 text-xs font-semibold text-emerald-700">
-                        Includes {formatCurrency(invoiceDiscountAmount)} discount
+                      <p className="mt-1 text-xs font-medium leading-relaxed text-emerald-700">
+                        -{formatCurrency(invoiceDiscountAmount)} discount
                       </p>
                     ) : null}
                     {dueAmount > 0 && !shopId ? (
-                      <p className="mt-2 text-xs font-medium">
-                        Shop is required before submitting a due sale.
+                      <p className="mt-1 text-xs font-medium leading-relaxed">
+                        Shop required for due sale.
                       </p>
                     ) : paymentMode === 'full' ? (
-                      <p className="mt-2 text-xs font-medium">
-                        This sale will be saved as fully paid.
-                      </p>
-                    ) : null}
-                    {!shopId ? (
-                      <p className="mt-2 text-xs font-medium">
-                        Select a shop before using `Save & Print Invoice`.
-                      </p>
-                    ) : dueAmount === 0 ? (
-                      <p className="mt-2 text-xs font-medium">
-                        Due is zero, so this sale will be fully paid.
+                      <p className="mt-1 text-xs font-medium leading-relaxed">
+                        Fully paid.
                       </p>
                     ) : null}
                   </div>
@@ -1039,7 +1094,7 @@ export function CreateSalePage() {
                 </div>
               </div>
 
-              <div className="xl:sticky xl:top-6">
+              <div className="md:sticky md:top-6">
                 <div className="rounded-3xl border border-slate-100 bg-white p-5 md:p-6 shadow-sm transition-all hover:shadow-md">
                   <div className="mb-6">
                     <h3 className="text-xl font-bold tracking-tight text-slate-900">Sale Items</h3>
@@ -1287,9 +1342,9 @@ export function CreateSalePage() {
                                     ) : null}
                                   </div>
 
-                                  <div className="flex items-center justify-between gap-3 text-xs text-slate-500">
-                                    <span>{productSearchStatusLabel}</span>
-                                    <span>
+                                  <div className="flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                    <span className="min-w-0">{productSearchStatusLabel}</span>
+                                    <span className="min-w-0 sm:text-right">
                                       {item.productSearch.trim().length >= 3
                                         ? 'Company + product auto-select is active'
                                         : 'Type 3+ letters or use Arrow + Enter'}
@@ -1324,27 +1379,29 @@ export function CreateSalePage() {
                             </div>
 
                             {/* Bottom Row: Numeric Inputs & Actions */}
-                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-4 items-end">
-                              <label className="block space-y-2">
+                            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 items-end">
+                              <label className="block min-w-0 space-y-2">
                                 <span className="text-sm font-bold text-slate-700">
                                   Quantity
                                 </span>
                                 <input
                                   type="number"
-                                  min="0.001"
-                                  step="0.001"
+                                  min="1"
+                                  step="1"
                                   value={item.quantity}
-                                  onChange={(event) =>
+                                  onChange={(event) => {
+                                    const val = event.target.value;
+                                    const rounded = val === '' ? '' : String(Math.round(Number(val)));
                                     updateSaleItem(item.id, (currentItem) => ({
                                       ...currentItem,
-                                      quantity: event.target.value,
-                                    }))
-                                  }
+                                      quantity: rounded,
+                                    }));
+                                  }}
                                   className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all hover:shadow-md hover:border-slate-300"
                                 />
                               </label>
 
-                              <label className="block space-y-2 lg:col-span-1 xl:col-span-1">
+                              <label className="block min-w-0 space-y-2">
                                 <span className="text-sm font-bold text-slate-700">
                                   Unit price
                                 </span>
@@ -1363,7 +1420,7 @@ export function CreateSalePage() {
                                 />
                               </label>
 
-                              <label className="block space-y-2 lg:col-span-1 xl:col-span-1">
+                              <label className="block min-w-0 space-y-2">
                                 <div className="flex items-center justify-between gap-2">
                                   <span className="text-sm font-bold text-slate-700">Discount</span>
                                   <select
@@ -1397,35 +1454,35 @@ export function CreateSalePage() {
                                 />
                               </label>
 
-                              <label className="block space-y-2 lg:col-span-1 xl:col-span-1">
+                              <label className="block min-w-0 space-y-2">
                                 <span className="text-sm font-bold text-slate-700">Free Qty</span>
                                 <input
                                   type="number"
                                   min="0"
-                                  step="0.001"
+                                  step="1"
                                   value={item.freeQuantity}
-                                  onChange={(event) =>
+                                  onChange={(event) => {
+                                    const val = event.target.value;
+                                    const rounded = val === '' ? '' : String(Math.round(Number(val)));
                                     updateSaleItem(item.id, (currentItem) => ({
                                       ...currentItem,
-                                      freeQuantity: event.target.value,
-                                    }))
-                                  }
+                                      freeQuantity: rounded,
+                                    }));
+                                  }}
                                   className="w-full rounded-2xl border border-slate-200 bg-white shadow-sm px-4 py-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all hover:shadow-md hover:border-slate-300"
                                 />
                               </label>
 
                               {showBuyPrice && (
-                                <div className="space-y-2">
-                                  <span className="text-sm font-bold text-slate-700">
-                                    Buy price
-                                  </span>
-                                  <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700">
+                                <div className="min-w-0 space-y-2">
+                                  <span className="text-sm font-bold text-slate-700">Buy price</span>
+                                  <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
                                     {formatCurrency(product?.buyPrice ?? 0)}
                                   </div>
                                 </div>
                               )}
 
-                              <div className="w-full">
+                              <div className="col-span-2 sm:col-span-1">
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -1437,28 +1494,28 @@ export function CreateSalePage() {
                                         ),
                                     )
                                   }
-                                  className="w-full xl:w-auto rounded-2xl border border-rose-200 bg-rose-50/50 px-5 py-3 text-sm font-bold text-rose-700 transition-colors hover:bg-rose-100"
+                                  className="w-full rounded-2xl border border-rose-200 bg-rose-50/50 px-4 py-3 text-sm font-bold text-rose-700 transition-colors hover:bg-rose-100"
                                 >
                                   Remove
                                 </button>
                               </div>
                             </div>
 
-                            <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-3 border-t border-slate-100 pt-4">
-                              <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs border border-slate-100">
+                            <div className="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2 md:grid-cols-3">
+                              <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
                                 <p className="text-slate-500 font-medium">Product unit</p>
                                 <p className="mt-0.5 font-bold text-slate-800">
                                   {product?.unit ?? 'Not selected'}
                                 </p>
                               </div>
-                              <div className="rounded-xl bg-slate-50 px-3 py-2 text-xs border border-slate-100">
+                              <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs">
                                 <p className="text-slate-500 font-medium">Line total</p>
                                 <p className="mt-0.5 font-bold text-slate-800">
                                   {formatCurrency(calculation.lineTotal)}
                                 </p>
                               </div>
                               {showProfit && (
-                                <div className="rounded-xl bg-emerald-50/50 px-3 py-2 text-xs border border-emerald-100/50">
+                                <div className="rounded-xl border border-emerald-100/50 bg-emerald-50/50 px-3 py-2 text-xs">
                                   <p className="text-emerald-600/80 font-medium">Line profit</p>
                                   <p className="mt-0.5 font-bold text-emerald-700">
                                     {formatCurrency(calculation.lineProfit)}
@@ -1522,4 +1579,3 @@ export function CreateSalePage() {
     </div>
   );
 }
-

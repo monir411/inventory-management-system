@@ -5,14 +5,17 @@ import { usePathname } from 'next/navigation';
 
 const navigation = [
   { href: '/', label: 'Dashboard' },
-  { href: '/sales', label: 'Sales' },
+  { href: '/sales/create', label: 'New Order' },
+  { href: '/sales', label: 'Sales Dashboard' },
+  { href: '/orders', label: 'All Orders' },
+  { href: '/delivery-summaries', label: 'Delivery Summaries' },
   { href: '/purchases', label: 'Purchases' },
   { href: '/products/all', label: 'All Products' }, 
   { href: '/products', label: 'Products' },
   { href: '/stock', label: 'Stock' },
   { href: '/routes', label: 'Routes' },
   { href: '/shops', label: 'Shops' },
-    { href: '/companies', label: 'Companies' },
+  { href: '/companies', label: 'Companies' },
 ];
 
 export function Sidebar() {
@@ -37,10 +40,12 @@ export function Sidebar() {
           const isActive =
             item.href === '/'
               ? pathname === item.href
+              : item.href === '/sales'
+                ? pathname === '/sales' || (pathname.startsWith('/sales/') && pathname !== '/sales/create')
               : item.href === '/products'
-                ? pathname === item.href
-                : item.href === '/stock'
-                  ? pathname === item.href || pathname.startsWith('/stock/')
+                ? pathname === '/products' || (pathname.startsWith('/products/') && pathname !== '/products/all')
+              : item.href === '/stock'
+                ? pathname === item.href || pathname.startsWith('/stock/')
                 : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
           return (

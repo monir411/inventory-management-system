@@ -4,6 +4,7 @@ import { getProducts } from '@/lib/api/products';
 import {
   getCompanyWiseSalesSummary,
   getDueOverview,
+  getMonthlySalesSummary,
   getSales,
   getTodayProfitSummary,
   getTodaySalesSummary,
@@ -32,6 +33,11 @@ export function useDashboardData(showProfit: boolean) {
     queryFn: () => getDueOverview(),
   });
 
+  const monthlySales = useQuery({
+    queryKey: ['sales', 'summary', 'monthly'],
+    queryFn: () => getMonthlySalesSummary(),
+  });
+
   const companyWiseSales = useQuery({
     queryKey: ['sales', 'summary', 'company'],
     queryFn: () => getCompanyWiseSalesSummary(),
@@ -57,6 +63,7 @@ export function useDashboardData(showProfit: boolean) {
     todaySales,
     todayProfit,
     dueOverview,
+    monthlySales,
     companyWiseSales,
     stockInvestment,
     recentSales,

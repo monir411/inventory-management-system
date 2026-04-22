@@ -523,3 +523,63 @@ export type LoginResponse = {
   access_token: string;
   user: User;
 };
+
+export type DeliverySummaryItem = {
+  id: number;
+  deliverySummaryId: number;
+  productId: number;
+  orderQuantity: number;
+  returnQuantity: number;
+  saleQuantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  remarks: string | null;
+  product?: Product;
+};
+
+export type DeliverySummary = {
+  id: number;
+  companyId: number | null;
+  routeId: number | null;
+  deliveryDate: string;
+  status: 'PENDING' | 'COMPLETED';
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+  company?: Company;
+  route?: Route;
+  items: DeliverySummaryItem[];
+};
+
+export type CreateDeliverySummaryItemPayload = {
+  productId: number;
+  orderQuantity: number;
+  unitPrice?: number;
+};
+
+export type CreateDeliverySummaryPayload = {
+  companyId?: number;
+  routeId?: number;
+  deliveryDate: string;
+  note?: string;
+  items: CreateDeliverySummaryItemPayload[];
+};
+
+export type UpdateDeliverySummaryItemPayload = {
+  productId: number;
+  returnQuantity: number;
+  remarks?: string;
+};
+
+export type UpdateDeliverySummaryPayload = {
+  items: UpdateDeliverySummaryItemPayload[];
+  finalize?: boolean;
+};
+
+export type DeliverySummariesQuery = {
+  page?: number;
+  limit?: number;
+  companyId?: number;
+  routeId?: number;
+  date?: string;
+};

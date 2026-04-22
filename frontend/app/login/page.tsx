@@ -7,6 +7,7 @@ import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react';
 import Image from 'next/image';
 
 export default function LoginPage() {
+  const SESSION_DURATION_MS = 60 * 60 * 1000;
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -23,6 +24,10 @@ export default function LoginPage() {
       if (typeof window !== 'undefined') {
         localStorage.setItem('token', data.access_token);
         localStorage.setItem('user', JSON.stringify(data.user));
+        localStorage.setItem(
+          'auth_expires_at',
+          String(Date.now() + SESSION_DURATION_MS),
+        );
       }
       router.push('/');
     } catch (err: any) {

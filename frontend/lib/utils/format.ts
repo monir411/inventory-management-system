@@ -43,6 +43,6 @@ export function formatDateTime(value: string) {
 
 export function formatNumber(value: number) {
   return new Intl.NumberFormat('en-BD', {
-    maximumFractionDigits: 3,
+    maximumFractionDigits: 0,
   }).format(value);
 }

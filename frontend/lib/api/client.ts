@@ -30,6 +30,7 @@ function buildUrl(
     }
   }
 
+
   return url.toString();
 }
 
@@ -55,6 +56,14 @@ export async function apiRequest<T>(
     },
     cache: 'no-store',
   });
+
+  if (response.status === 401 && typeof window !== 'undefined') {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('auth_expires_at');
+    window.location.href = '/login';
+    throw new ApiError('Session expired. Please sign in again.', 401);
+  }
 
   if (!response.ok) {
     const fallbackMessage = `Request failed with status ${response.status}`;

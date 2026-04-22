@@ -41,6 +41,19 @@ export function receiveSalePayment(id: number, payload: ReceiveSalePaymentPayloa
   });
 }
 
+export function updateSale(id: number, payload: CreateSalePayload) {
+  return apiRequest<Sale>(`sales/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deleteSale(id: number) {
+  return apiRequest<{ success: boolean }>(`sales/${id}`, {
+    method: 'DELETE',
+  });
+}
+
 export function getTodaySalesSummary(query: SalesQuery = {}) {
   return apiRequest<TodaySalesSummary>('sales/summary/today-sales', {
     query,

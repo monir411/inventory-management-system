@@ -21,6 +21,7 @@ export function logout() {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
+    localStorage.removeItem('auth_expires_at');
     window.location.href = '/login';
   }
 }

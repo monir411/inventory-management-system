@@ -5,6 +5,22 @@ import { useRouter, usePathname } from 'next/navigation';
 import { User, Role } from '@/types/api';
 import { Loader2 } from 'lucide-react';
 
+const AUTH_EXPIRY_KEY = 'auth_expires_at';
+
+function clearStoredAuth() {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+  localStorage.removeItem(AUTH_EXPIRY_KEY);
+}
+
+function isSessionExpired() {
+  const expiresAt = localStorage.getItem(AUTH_EXPIRY_KEY);
+  if (!expiresAt) return true;
+
+  const expiryTime = Number(expiresAt);
+  return !Number.isFinite(expiryTime) || Date.now() >= expiryTime;
+}
+
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -32,16 +48,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const storedUser = localStorage.getItem('user');
       const token = localStorage.getItem('token');
       
-      if (token && storedUser) {
+      if (token && storedUser && !isSessionExpired()) {
         setUser(JSON.parse(storedUser));
         if (isAuthPage) {
           router.push('/');
+        }
+      } else if (token || storedUser) {
+        clearStoredAuth();
+        setUser(null);
+        if (!isAuthPage) {
+          router.push('/login');
         }
       } else if (!isAuthPage) {
         router.push('/login');
       }
     } catch (e) {
       console.error("Auth init error:", e);
+      clearStoredAuth();
       if (!isAuthPage) {
         router.push('/login');
       }
@@ -50,9 +73,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [pathname, isAuthPage, router]);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const checkSession = () => {
+      if (isSessionExpired()) {
+        clearStoredAuth();
+        setUser(null);
+        router.push('/login');
+      }
+    };
+
+    checkSession();
+    const intervalId = window.setInterval(checkSession, 30 * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [user, router]);
+
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
+    clearStoredAuth();
     setUser(null);
     router.push('/login');
   };
