@@ -1,84 +1,39 @@
-import {
-  Column,
-  Entity,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
-import { numericColumnTransformer } from '../../../common/database/numeric.transformer';
-import { Product } from '../../products/entities/product.entity';
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
 import { DeliverySummary } from './delivery-summary.entity';
+import { Product } from '../../products/entities/product.entity';
+import { ColumnNumericTransformer } from '../../orders/orders.constants';
 
-@Entity({ name: 'delivery_summary_items' })
+@Entity('delivery_summary_items')
 export class DeliverySummaryItem {
   @PrimaryGeneratedColumn()
   id: number;
 
   @Column()
-  deliverySummaryId: number;
+  summaryId: number;
+
+  @ManyToOne(() => DeliverySummary, (summary) => summary.items, { onDelete: 'CASCADE' })
+  @JoinColumn({ name: 'summaryId' })
+  summary: DeliverySummary;
 
   @Column()
   productId: number;
 
-  @Column({
-    type: 'decimal',
-    precision: 14,
-    scale: 3,
-    transformer: numericColumnTransformer,
-  })
-  orderQuantity: number;
-
-  @Column({
-    type: 'decimal',
-    precision: 14,
-    scale: 3,
-    transformer: numericColumnTransformer,
-    default: 0,
-  })
-  returnQuantity: number;
-
-  @Column({
-    type: 'decimal',
-    precision: 14,
-    scale: 3,
-    transformer: numericColumnTransformer,
-    default: 0,
-  })
-  saleQuantity: number; // calculated as orderQuantity - returnQuantity
-
-  @Column({
-    type: 'decimal',
-    precision: 12,
-    scale: 2,
-    transformer: numericColumnTransformer,
-    default: 0,
-  })
-  unitPrice: number;
-
-  @Column({
-    type: 'decimal',
-    precision: 14,
-    scale: 2,
-    transformer: numericColumnTransformer,
-    default: 0,
-  })
-  lineTotal: number; // calculated as saleQuantity * unitPrice
-
-  @Column({ type: 'text', nullable: true })
-  remarks: string | null;
-
-  @Column({ default: false })
-  isFromOrder: boolean;
-
-  @ManyToOne(() => DeliverySummary, (ds) => ds.items, {
-    onDelete: 'CASCADE',
-  })
-  @JoinColumn({ name: 'deliverySummaryId' })
-  deliverySummary: DeliverySummary;
-
-  @ManyToOne(() => Product, {
-    onDelete: 'RESTRICT',
-  })
+  @ManyToOne(() => Product)
   @JoinColumn({ name: 'productId' })
   product: Product;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  orderedQuantity: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  returnedQuantity: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  soldQuantity: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  unitPrice: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  lineTotal: number;
 }

@@ -16,6 +16,7 @@ import { PageCard } from '@/components/ui/page-card';
 import { useToast, useToastNotification } from '@/components/ui/toast-provider';
 import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/format';
 import type { Company, CreateShopPayload, Product, Route, Sale, Shop } from '@/types/api';
+import { TrendingUp } from 'lucide-react';
 
 type SaleItemForm = {
   id: string;
@@ -238,16 +239,20 @@ export function CreateSalePage({ saleId }: { saleId?: string }) {
         setPaidAmount(String(sale.paidAmount));
         setNote(sale.note || '');
 
-        setItems(sale.items.map(item => ({
-          id: String(item.id),
-          productId: String(item.productId),
-          productSearch: item.product?.name || '',
-          quantity: String(item.quantity),
-          unitPrice: String(item.unitPrice),
-          discountType: item.discountType === 'percentage' ? 'percentage' : 'fixed',
-          discountValue: String(item.discountValue || ''),
-          freeQuantity: String(item.freeQuantity || ''),
-        })));
+        setItems(
+          sale.items?.length
+            ? sale.items.map((item) => ({
+                id: String(item.id),
+                productId: String(item.productId),
+                productSearch: item.product?.name || '',
+                quantity: String(item.quantity),
+                unitPrice: String(item.unitPrice),
+                discountType: item.discountType === 'percentage' ? 'percentage' : 'fixed',
+                discountValue: String(item.discountValue || ''),
+                freeQuantity: String(item.freeQuantity || ''),
+              }))
+            : [initialItem()],
+        );
       } catch (e) {
         setFormError('Failed to load sale data');
       } finally {
@@ -756,8 +761,8 @@ export function CreateSalePage({ saleId }: { saleId?: string }) {
               </div>
             </div>
 
-            <div className="grid gap-6 md:grid-cols-2 md:items-start">
-              <div className="space-y-6">
+            <div className="grid gap-6 lg:grid-cols-3 lg:items-start">
+              <div className="lg:col-span-2 space-y-6">
                 <div className="rounded-3xl border border-slate-100 bg-white p-6 md:p-8 shadow-sm transition-all hover:shadow-md">
                   <div className="mb-8">
                     <h3 className="text-2xl font-bold tracking-tight text-slate-900">Order Details</h3>
@@ -1013,88 +1018,7 @@ export function CreateSalePage({ saleId }: { saleId?: string }) {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div className="min-w-0 rounded-2xl bg-slate-900 p-4 text-white">
-                    <p className="text-xs text-slate-400 font-medium uppercase tracking-wide">Total amount</p>
-                    <p className="mt-1.5 break-words text-xl font-bold leading-tight">
-                      {formatCurrency(totalAmount)}
-                    </p>
-                  </div>
-                  {showProfit && (
-                    <div className="min-w-0 rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-emerald-900">
-                      <p className="text-xs text-emerald-600 font-medium uppercase tracking-wide">Total profit</p>
-                      <p className="mt-1.5 break-words text-xl font-bold leading-tight">
-                        {formatCurrency(totalProfit)}
-                      </p>
-                    </div>
-                  )}
-                  <div
-                    className={`min-w-0 rounded-2xl border p-4 ${dueAmount > 0
-                      ? 'bg-amber-50 border-amber-100 text-amber-900'
-                      : 'bg-emerald-50 border-emerald-100 text-emerald-900'
-                      }`}
-                  >
-                    <p className={`text-xs font-medium uppercase tracking-wide ${dueAmount > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>Due amount</p>
-                    <p className="mt-1.5 break-words text-xl font-bold leading-tight">
-                      {formatCurrency(dueAmount)}
-                    </p>
-                    {invoiceDiscountAmount > 0 ? (
-                      <p className="mt-1 text-xs font-medium leading-relaxed text-emerald-700">
-                        -{formatCurrency(invoiceDiscountAmount)} discount
-                      </p>
-                    ) : null}
-                    {dueAmount > 0 && !shopId ? (
-                      <p className="mt-1 text-xs font-medium leading-relaxed">
-                        Shop required for due sale.
-                      </p>
-                    ) : paymentMode === 'full' ? (
-                      <p className="mt-1 text-xs font-medium leading-relaxed">
-                        Fully paid.
-                      </p>
-                    ) : null}
-                  </div>
-                </div>
 
-                <div className="rounded-3xl border border-cyan-200 bg-gradient-to-br from-cyan-50 to-blue-50 p-5 text-sm text-cyan-900 shadow-sm">
-                  <div className="flex items-center gap-2">
-                    <svg className="h-5 w-5 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                    <p className="font-bold">Fast order entry</p>
-                  </div>
-                  <p className="mt-2 leading-relaxed opacity-90">
-                    Use <span className="font-semibold text-cyan-800">Save & next order</span> when you are entering many sales on the same day. Company, route, date, and the quick full-paid mode stay ready so the next order is faster to enter.
-                  </p>
-                </div>
-
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-                  <button
-                    type="button"
-                    disabled={isSaving}
-                    onClick={() => void submitSale('next')}
-                    className="flex-1 rounded-2xl bg-slate-900 px-6 py-4 text-sm font-bold text-white shadow-md transition-all hover:bg-slate-800 hover:shadow-lg disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-900 focus:ring-offset-2"
-                  >
-                    {isSaving ? 'Saving...' : 'Save & Next Order'}
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="flex-1 rounded-2xl border-2 border-slate-200 bg-white px-6 py-4 text-sm font-bold text-slate-700 shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-2"
-                  >
-                    {isSaving ? 'Saving...' : 'Save & View Details'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isSaving}
-                    onClick={() => void submitSale('print')}
-                    className="flex-1 rounded-2xl border-2 border-indigo-600 bg-indigo-50 px-6 py-4 text-sm font-bold text-indigo-700 shadow-sm transition-all hover:bg-indigo-100 hover:shadow-md disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2"
-                  >
-                    {isSaving ? 'Saving...' : 'Save & Print Invoice'}
-                  </button>
-                </div>
-              </div>
-
-              <div className="md:sticky md:top-6">
                 <div className="rounded-3xl border border-slate-100 bg-white p-5 md:p-6 shadow-sm transition-all hover:shadow-md">
                   <div className="mb-6">
                     <h3 className="text-xl font-bold tracking-tight text-slate-900">Sale Items</h3>
@@ -1538,7 +1462,101 @@ export function CreateSalePage({ saleId }: { saleId?: string }) {
                   </div>
                 </div>
               </div>
-            </div>
+                <div className="rounded-3xl border border-slate-100 bg-white p-6 md:p-8 shadow-sm transition-all hover:shadow-md">
+                  <div className="mb-6">
+                    <h3 className="text-xl font-black tracking-tight text-slate-900 uppercase tracking-widest text-[10px] text-slate-400">Order Summary</h3>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2 border-b border-slate-50">
+                      <span className="text-sm font-medium text-slate-500">Sub Total</span>
+                      <span className="text-sm font-bold text-slate-900">{formatCurrency(subTotalAmount)}</span>
+                    </div>
+                    {invoiceDiscountAmount > 0 && (
+                      <div className="flex items-center justify-between py-2 border-b border-slate-50 text-emerald-600">
+                        <span className="text-sm font-medium">Discount</span>
+                        <span className="text-sm font-bold">-{formatCurrency(invoiceDiscountAmount)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between py-4">
+                      <span className="text-lg font-bold text-slate-900">Total Payable</span>
+                      <span className="text-2xl font-black text-indigo-600">{formatCurrency(totalAmount)}</span>
+                    </div>
+
+                    <div className="pt-4 space-y-3">
+                      <label className="block space-y-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Paid amount</span>
+                          {paymentMode === 'full' ? (
+                            <span className="text-[10px] font-bold text-emerald-600 uppercase">Auto-filled</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPaidAmount(formatMoneyInput(totalAmount))}
+                              className="text-[10px] font-bold text-indigo-600 uppercase hover:underline"
+                            >
+                              Use full
+                            </button>
+                          )}
+                        </div>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={paidAmount}
+                          onChange={(event) => setPaidAmount(event.target.value)}
+                          disabled={paymentMode === 'full'}
+                          className={`w-full rounded-2xl border border-slate-200 bg-slate-50 shadow-inner px-4 py-3 text-lg font-black text-slate-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all ${paymentMode === 'full' ? 'cursor-not-allowed opacity-70' : ''}`}
+                        />
+                      </label>
+
+                      <div className={`p-4 rounded-2xl border ${dueAmount > 0 ? 'bg-amber-50 border-amber-100 text-amber-900' : 'bg-emerald-50 border-emerald-100 text-emerald-900'}`}>
+                        <p className="text-[10px] font-bold uppercase tracking-widest opacity-60">Remaining Due</p>
+                        <p className="text-xl font-black mt-1">{formatCurrency(dueAmount)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-8 space-y-3">
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => void submitSale('next')}
+                      className="w-full rounded-2xl bg-slate-900 px-6 py-4 text-sm font-bold text-white shadow-lg transition-all hover:bg-slate-800 hover:-translate-y-0.5 disabled:opacity-60"
+                    >
+                      {isSaving ? 'Saving...' : 'Save & Next Order'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isSaving}
+                      onClick={() => void submitSale('print')}
+                      className="w-full rounded-2xl bg-indigo-600 px-6 py-4 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:bg-indigo-700 hover:-translate-y-0.5 disabled:opacity-60"
+                    >
+                      {isSaving ? 'Saving...' : 'Save & Print Invoice'}
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="w-full rounded-2xl border-2 border-slate-200 bg-white px-6 py-4 text-sm font-bold text-slate-700 transition-all hover:bg-slate-50 disabled:opacity-60"
+                    >
+                      {isSaving ? 'Saving...' : 'Save & View Details'}
+                    </button>
+                  </div>
+                </div>
+
+                {showProfit && (
+                  <div className="rounded-3xl bg-emerald-900 p-6 text-white shadow-xl overflow-hidden relative">
+                    <div className="relative z-10">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Estimated Profit</p>
+                      <p className="text-3xl font-black mt-1">{formatCurrency(totalProfit)}</p>
+                      <p className="text-xs text-emerald-300/80 mt-2">Margin: {totalAmount > 0 ? ((totalProfit / totalAmount) * 100).toFixed(1) : 0}%</p>
+                    </div>
+                    <div className="absolute -right-4 -bottom-4 opacity-10">
+                      <TrendingUp className="h-32 w-32" />
+                    </div>
+                  </div>
+                )}
+              </div>
           </form>
         ) : null}
       </PageCard>

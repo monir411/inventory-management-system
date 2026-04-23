@@ -11,7 +11,6 @@ import {
 } from 'typeorm';
 import { numericColumnTransformer } from '../../../common/database/numeric.transformer';
 import { Company } from '../../companies/entities/company.entity';
-import { StockMovement } from '../../stock/entities/stock-movement.entity';
 import { ProductUnit } from './product-unit.enum';
 
 @Entity({ name: 'products' })
@@ -66,7 +65,4 @@ export class Product {
   })
   @JoinColumn({ name: 'companyId' })
   company: Company;
-
-  @OneToMany(() => StockMovement, (stockMovement) => stockMovement.product)
-  stockMovements: StockMovement[];
 }

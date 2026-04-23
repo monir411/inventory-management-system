@@ -7,7 +7,7 @@ import {
   IsPositive,
   IsString,
 } from 'class-validator';
-import { StockMovementType } from '../enums/stock-movement-type.enum';
+import { StockMovementType } from '../stock.constants';
 
 export class QueryStockMovementsDto {
   @IsOptional()

@@ -5,12 +5,9 @@ import type {
   UpdateProductPayload,
 } from '@/types/api';
 
-export function getProducts(companyId?: number, search?: string) {
+export function getProducts(query?: { companyId?: number; search?: string; isActive?: boolean }) {
   return apiRequest<Product[]>('products', {
-    query: {
-      companyId,
-      search,
-    },
+    query: query as Record<string, any>,
   });
 }
 

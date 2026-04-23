@@ -1,16 +1,34 @@
 'use client';
 
 import { useAuth } from '../auth/auth-provider';
+import { usePathname } from 'next/navigation';
 import { LogOut, User } from 'lucide-react';
 
 export function Topbar() {
   const { user, logout } = useAuth();
+  const pathname = usePathname();
+  
+  const getTitle = () => {
+    const parts = pathname.split('/').filter(Boolean);
+    if (parts.length === 0) return 'Dashboard';
+    
+    const first = parts[0];
+    if (first === 'orders') return 'Manage Order';
+    if (first === 'sales') return 'Sales Management';
+    if (first === 'products') return 'Products';
+    if (first === 'stock') return 'Inventory';
+    if (first === 'routes') return 'Routes';
+    if (first === 'shops') return 'Shops';
+    if (first === 'companies') return 'Companies';
+    
+    return first.charAt(0).toUpperCase() + first.slice(1);
+  };
 
   return (
     <header className="rounded-3xl border border-slate-200 bg-white px-6 py-4 shadow-sm flex items-center justify-between">
       <div>
         <h2 className="text-xl font-semibold text-slate-800">
-          Dashboard
+          {getTitle()}
         </h2>
         <p className="text-sm font-medium text-slate-500">
           {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}

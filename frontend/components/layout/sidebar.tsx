@@ -4,13 +4,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 const navigation = [
-  { href: '/', label: 'Dashboard' },
-  { href: '/sales/create', label: 'New Order' },
-  { href: '/sales', label: 'Sales Dashboard' },
-  { href: '/orders', label: 'All Orders' },
-  { href: '/delivery-summaries', label: 'Delivery Summaries' },
-  { href: '/purchases', label: 'Purchases' },
-  { href: '/products/all', label: 'All Products' }, 
+  { href: '/orders/new', label: 'New Order' },
+  { href: '/orders', label: 'Manage Order' },
+  { href: '/delivery-summaries', label: 'Delivery Summary' },
   { href: '/products', label: 'Products' },
   { href: '/stock', label: 'Stock' },
   { href: '/routes', label: 'Routes' },
@@ -31,22 +27,13 @@ export function Sidebar() {
           Admin Workspace
         </h1>
         <p className="mt-2 text-sm leading-6 text-slate-500">
-          Companies, products, purchases, stock, routes, shops, and sales connected to the backend API.
+          Core management for Orders, Companies, Products, Routes, and Shops.
         </p>
       </div>
 
       <nav className="space-y-2">
         {navigation.map((item) => {
-          const isActive =
-            item.href === '/'
-              ? pathname === item.href
-              : item.href === '/sales'
-                ? pathname === '/sales' || (pathname.startsWith('/sales/') && pathname !== '/sales/create')
-              : item.href === '/products'
-                ? pathname === '/products' || (pathname.startsWith('/products/') && pathname !== '/products/all')
-              : item.href === '/stock'
-                ? pathname === item.href || pathname.startsWith('/stock/')
-                : pathname === item.href || pathname.startsWith(`${item.href}/`);
+          const isActive = pathname === item.href;
 
           return (
             <Link

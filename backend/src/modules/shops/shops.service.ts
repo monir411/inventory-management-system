@@ -7,7 +7,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Route } from '../routes/entities/route.entity';
-import { Sale } from '../sales/entities/sale.entity';
 import { CreateShopDto } from './dto/create-shop.dto';
 import { QueryShopsDto } from './dto/query-shops.dto';
 import { UpdateShopDto } from './dto/update-shop.dto';
@@ -20,8 +19,6 @@ export class ShopsService {
     private readonly shopsRepository: Repository<Shop>,
     @InjectRepository(Route)
     private readonly routesRepository: Repository<Route>,
-    @InjectRepository(Sale)
-    private readonly salesRepository: Repository<Sale>,
   ) {}
 
   async create(createShopDto: CreateShopDto) {
@@ -41,25 +38,9 @@ export class ShopsService {
   }
 
   async findAll(query: QueryShopsDto) {
-    const salesSummarySubQuery = this.shopsRepository.manager
-      .createQueryBuilder()
-      .select('sale.shopId', 'shopId')
-      .addSelect('COUNT(sale.id)', 'totalOrders')
-      .addSelect('COALESCE(SUM(sale.dueAmount), 0)', 'totalDue')
-      .from(Sale, 'sale')
-      .where('sale.shopId IS NOT NULL')
-      .groupBy('sale.shopId');
-
     const queryBuilder = this.shopsRepository
       .createQueryBuilder('shop')
       .leftJoinAndSelect('shop.route', 'route')
-      .leftJoin(
-        `(${salesSummarySubQuery.getQuery()})`,
-        'shop_sales',
-        '"shop_sales"."shopId" = shop.id',
-      )
-      .addSelect('COALESCE("shop_sales"."totalOrders", 0)', 'totalOrders')
-      .addSelect('COALESCE("shop_sales"."totalDue", 0)', 'totalDue')
       .orderBy('shop.name', 'ASC');
 
     if (query.routeId) {
@@ -81,12 +62,12 @@ export class ShopsService {
       });
     }
 
-    const { entities, raw } = await queryBuilder.getRawAndEntities();
+    const shops = await queryBuilder.getMany();
 
-    return entities.map((shop, index) => ({
+    return shops.map(shop => ({
       ...shop,
-      totalOrders: Number(raw[index]?.totalOrders ?? 0),
-      totalDue: Number(raw[index]?.totalDue ?? 0),
+      totalOrders: 0,
+      totalDue: 0,
     }));
   }
 
@@ -141,12 +122,6 @@ export class ShopsService {
 
   async remove(id: number) {
     const shop = await this.findOne(id);
-    const saleCount = await this.salesRepository.count({ where: { shopId: id } });
-    if (saleCount > 0) {
-      throw new BadRequestException(
-        `Shop cannot be deleted because it has ${saleCount} sale(s) associated with it.`,
-      );
-    }
     await this.shopsRepository.remove(shop);
   }
 

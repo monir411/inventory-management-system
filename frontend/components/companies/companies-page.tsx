@@ -2,8 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { createCompany, deleteCompany, getCompanies, updateCompany } from '@/lib/api/companies';
-import { getStockInvestmentSummary } from '@/lib/api/stock';
-import type { Company, StockInvestmentCompanySummary } from '@/types/api';
+import type { Company } from '@/types/api';
 import { LoadingBlock } from '@/components/ui/loading-block';
 import { StateMessage } from '@/components/ui/state-message';
 import { useToastNotification } from '@/components/ui/toast-provider';
@@ -19,7 +18,6 @@ type SortKey = 'name' | 'code' | 'newest';
 
 export function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
-  const [stockStats, setStockStats] = useState<StockInvestmentCompanySummary[]>([]);
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [deletingCompany, setDeletingCompany] = useState<Company | null>(null);
   const [form, setForm] = useState(initialForm);
@@ -44,9 +42,8 @@ export function CompaniesPage() {
     try {
       setIsLoading(true);
       setError(null);
-      const [data, inv] = await Promise.all([getCompanies(), getStockInvestmentSummary()]);
+      const data = await getCompanies();
       setCompanies(data);
-      setStockStats(inv.companies);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load.');
     } finally {
@@ -62,12 +59,8 @@ export function CompaniesPage() {
       : initialForm);
   }, [editingCompany]);
 
-  const statsForCompany = (id: number) => stockStats.find((s) => s.companyId === id);
-
   const activeCount = companies.filter((c) => c.isActive).length;
   const inactiveCount = companies.length - activeCount;
-  const totalProducts = stockStats.reduce((s, c) => s + c.productCount, 0);
-  const totalInvestment = stockStats.reduce((s, c) => s + c.investmentValue, 0);
 
   const filtered = useMemo(() => {
     let list = companies.filter((c) => {
@@ -179,7 +172,7 @@ export function CompaniesPage() {
                   <p className="text-[10px] font-bold uppercase tracking-[0.32em] text-cyan-300">Company Management</p>
                 </div>
                 <h1 className="mt-3 text-2xl font-bold tracking-tight text-white sm:text-3xl">Companies</h1>
-                <p className="mt-1.5 text-sm text-slate-400">Manage your supplier companies, track their products and stock investment.</p>
+                <p className="mt-1.5 text-sm text-slate-400">Manage your supplier companies and their basic profile information.</p>
               </div>
               <button
                 type="button"
@@ -189,7 +182,7 @@ export function CompaniesPage() {
                 + Add Company
               </button>
             </div>
-            <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="mt-5 grid grid-cols-2 gap-3">
               <div className="rounded-2xl border border-white/10 bg-white/[0.08] p-4">
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-slate-400">Total</p>
                 <p className="mt-2 text-2xl font-bold text-white">{companies.length}</p>
@@ -199,16 +192,6 @@ export function CompaniesPage() {
                 <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-emerald-400">Active</p>
                 <p className="mt-2 text-2xl font-bold text-white">{activeCount}</p>
                 <p className="mt-1 text-xs text-slate-500">{inactiveCount} inactive</p>
-              </div>
-              <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-cyan-400">Products</p>
-                <p className="mt-2 text-2xl font-bold text-white">{totalProducts}</p>
-                <p className="mt-1 text-xs text-slate-500">Across all companies</p>
-              </div>
-              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/10 p-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-violet-400">Investment</p>
-                <p className="mt-2 truncate text-2xl font-bold text-white">৳{formatMoney(totalInvestment)}</p>
-                <p className="mt-1 text-xs text-slate-500">Total stock value</p>
               </div>
             </div>
           </div>
@@ -258,7 +241,6 @@ export function CompaniesPage() {
 
             <div className="space-y-3">
               {filtered.map((company) => {
-                const stats = statsForCompany(company.id);
                 const isEditing = editingCompany?.id === company.id;
                 const isToggling = isTogglingId === company.id;
 
@@ -298,27 +280,7 @@ export function CompaniesPage() {
                         </div>
                       </div>
 
-                      {/* Per-company stock stats */}
-                      {stats ? (
-                        <div className="mt-4 grid grid-cols-2 gap-2 border-t border-slate-100 pt-4 sm:grid-cols-4">
-                          <div className="rounded-xl bg-slate-50 p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Products</p>
-                            <p className="mt-1 text-xl font-bold text-slate-900">{stats.productCount}</p>
-                          </div>
-                          <div className="rounded-xl bg-cyan-50 p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-cyan-500">In Stock</p>
-                            <p className="mt-1 text-xl font-bold text-cyan-900">{stats.inStockProductCount}</p>
-                          </div>
-                          <div className="rounded-xl bg-amber-50 p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-500">Low Stock</p>
-                            <p className="mt-1 text-xl font-bold text-amber-900">{stats.lowStockProductCount}</p>
-                          </div>
-                          <div className="rounded-xl bg-emerald-50 p-3">
-                            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-500">Value ৳</p>
-                            <p className="mt-1 truncate text-xl font-bold text-emerald-900">{formatMoney(stats.investmentValue)}</p>
-                          </div>
-                        </div>
-                      ) : null}
+
                     </div>
                   </div>
                 );

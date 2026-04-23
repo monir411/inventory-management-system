@@ -1,33 +1,24 @@
-import { Type } from 'class-transformer';
-import {
-  IsDate,
-  IsInt,
-  IsNumber,
-  IsOptional,
-  IsPositive,
-  IsString,
-} from 'class-validator';
+import { IsEnum, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { StockMovementType } from '../stock.constants';
 
 export class CreateStockMovementDto {
-  @Type(() => Number)
-  @IsInt()
-  @IsPositive()
-  companyId: number;
-
-  @Type(() => Number)
-  @IsInt()
-  @IsPositive()
+  @IsNumber()
   productId: number;
 
-  @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 3 })
+  @IsNumber()
+  companyId: number;
+
+  @IsEnum(StockMovementType)
+  type: StockMovementType;
+
+  @IsNumber()
   quantity: number;
 
-  @IsOptional()
   @IsString()
+  @IsOptional()
   note?: string;
 
-  @Type(() => Date)
-  @IsDate()
-  movementDate: Date;
+  @IsString()
+  @IsOptional()
+  reference?: string;
 }

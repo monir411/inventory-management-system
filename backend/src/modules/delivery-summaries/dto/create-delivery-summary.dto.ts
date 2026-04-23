@@ -18,7 +18,7 @@ export class DeliverySummaryItemDto {
 
   @IsNumber()
   @Min(0.001)
-  orderQuantity: number;
+  orderedQty: number;
 
   @IsOptional()
   @IsNumber()
@@ -35,6 +35,10 @@ export class CreateDeliverySummaryDto {
   @IsInt()
   routeId?: number;
 
+  @IsOptional()
+  @IsString()
+  scope?: string;
+
   @Transform(({ value }) => (value ? new Date(value) : new Date()))
   @IsDate()
   deliveryDate: Date;
@@ -43,8 +47,9 @@ export class CreateDeliverySummaryDto {
   @IsString()
   note?: string;
 
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => DeliverySummaryItemDto)
-  items: DeliverySummaryItemDto[];
+  items?: DeliverySummaryItemDto[];
 }

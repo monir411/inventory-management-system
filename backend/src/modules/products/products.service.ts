@@ -6,7 +6,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Company } from '../companies/entities/company.entity';
-import { StockMovement } from '../stock/entities/stock-movement.entity';
 import { CreateProductDto } from './dto/create-product.dto';
 import { QueryProductsDto } from './dto/query-products.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -19,9 +18,7 @@ export class ProductsService {
     private readonly productsRepository: Repository<Product>,
     @InjectRepository(Company)
     private readonly companiesRepository: Repository<Company>,
-    @InjectRepository(StockMovement)
-    private readonly stockMovementsRepository: Repository<StockMovement>,
-  ) {}
+  ) { }
 
   async create(createProductDto: CreateProductDto) {
     await this.ensureCompanyExists(createProductDto.companyId);
@@ -96,16 +93,6 @@ export class ProductsService {
 
   async remove(id: number) {
     const product = await this.findOne(id);
-    const stockMovementCount = await this.stockMovementsRepository.count({
-      where: { productId: product.id },
-    });
-
-    if (stockMovementCount > 0) {
-      throw new ConflictException(
-        'Product cannot be deleted while stock movements exist for it.',
-      );
-    }
-
     await this.productsRepository.remove(product);
     return { success: true };
   }

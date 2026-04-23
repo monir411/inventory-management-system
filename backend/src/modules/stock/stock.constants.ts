@@ -1,0 +1,9 @@
+export enum StockMovementType {
+  OPENING = 'OPENING',
+  STOCK_IN = 'STOCK_IN',
+  STOCK_OUT = 'STOCK_OUT',
+  ADJUSTMENT = 'ADJUSTMENT',
+  RETURN_IN = 'RETURN_IN',
+  DAMAGE = 'DAMAGE',
+  SALE = 'SALE',
+}

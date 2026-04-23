@@ -7,7 +7,7 @@ import { ShopsController } from './shops.controller';
 import { ShopsService } from './shops.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Shop, Route, Sale])],
+  imports: [TypeOrmModule.forFeature([Shop, Route])],
   controllers: [ShopsController],
   providers: [ShopsService],
   exports: [ShopsService],

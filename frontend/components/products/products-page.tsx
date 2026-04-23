@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { getCompanies } from '@/lib/api/companies';
 import { createProduct, getProducts, updateProduct } from '@/lib/api/products';
-import { getStockSummary } from '@/lib/api/stock';
 import { LoadingBlock } from '@/components/ui/loading-block';
 import { Pagination } from '@/components/ui/pagination';
 import { PageCard } from '@/components/ui/page-card';
@@ -35,7 +34,6 @@ const initialFormState = {
 export function ProductsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [stockByProductId, setStockByProductId] = useState<Record<number, number>>({});
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [formState, setFormState] = useState(initialFormState);
@@ -88,25 +86,28 @@ export function ProductsPage() {
 
   useEffect(() => {
     async function loadProducts() {
-      if (!selectedCompanyId) {
-        setProducts([]);
-        setStockByProductId({});
-        return;
-      }
-
       try {
         setIsLoading(true);
         setError(null);
-        const [productData, stockSummary] = await Promise.all([
-          getProducts(selectedCompanyId, searchTerm),
-          getStockSummary(selectedCompanyId, searchTerm),
-        ]);
+        
+        // If searching, we search globally first to find the company
+        let searchCompanyId = selectedCompanyId;
+        if (searchTerm) {
+          const globalResults = await getProducts({ search: searchTerm });
+          if (globalResults.length > 0) {
+            const firstMatch = globalResults[0];
+            if (firstMatch.companyId !== selectedCompanyId) {
+              setSelectedCompanyId(firstMatch.companyId);
+              searchCompanyId = firstMatch.companyId;
+            }
+          }
+        }
+
+        const productData = await getProducts({
+          companyId: searchCompanyId || undefined,
+          search: searchTerm || undefined,
+        });
         setProducts(productData);
-        setStockByProductId(
-          Object.fromEntries(
-            stockSummary.map((item) => [item.productId, item.currentStock]),
-          ),
-        );
       } catch (loadError) {
         setError(
           loadError instanceof Error
@@ -141,33 +142,17 @@ export function ProductsPage() {
     });
   }, [editingProduct, selectedCompanyId]);
 
-  const selectedCompanyName = useMemo(
-    () => companies.find((company) => company.id === selectedCompanyId)?.name ?? 'Select company',
-    [companies, selectedCompanyId],
-  );
-
   const paginatedProducts = useMemo(() => {
     const startIndex = (currentPage - 1) * productsPageSize;
     return products.slice(startIndex, startIndex + productsPageSize);
   }, [currentPage, products]);
 
   async function refreshProducts(companyId: number | null) {
-    if (!companyId) {
-      setProducts([]);
-      setStockByProductId({});
-      return;
-    }
-
-    const [productData, stockSummary] = await Promise.all([
-      getProducts(companyId, searchTerm),
-      getStockSummary(companyId, searchTerm),
-    ]);
+    const productData = await getProducts({
+      companyId: companyId || undefined,
+      search: searchTerm || undefined,
+    });
     setProducts(productData);
-    setStockByProductId(
-      Object.fromEntries(
-        stockSummary.map((item) => [item.productId, item.currentStock]),
-      ),
-    );
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -238,10 +223,12 @@ export function ProductsPage() {
               onChange={(event) => {
                 setEditingProduct(null);
                 setCurrentPage(1);
-                setSelectedCompanyId(Number(event.target.value));
+                const val = event.target.value;
+                setSelectedCompanyId(val === '' ? null : Number(val));
               }}
               className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
             >
+              <option value="">All Companies</option>
               {companies.map((company) => (
                 <option key={company.id} value={company.id}>
                   {company.name}
@@ -260,7 +247,6 @@ export function ProductsPage() {
                   <th className="px-3 py-3 font-medium">Product</th>
                   <th className="px-3 py-3 font-medium">SKU</th>
                   <th className="px-3 py-3 font-medium">Unit</th>
-                  <th className="px-3 py-3 font-medium">Current Stock</th>
                   <th className="px-3 py-3 font-medium">Buy Price</th>
                   <th className="px-3 py-3 font-medium">Sale Price</th>
                   <th className="px-3 py-3 font-medium">Status</th>
@@ -272,13 +258,12 @@ export function ProductsPage() {
                   <tr key={product.id} className="align-top text-slate-700">
                     <td className="px-3 py-4">
                       <div className="font-medium text-slate-900">{product.name}</div>
-                      <div className="text-xs text-slate-500">{selectedCompanyName}</div>
+                      {!selectedCompanyId && product.company && (
+                        <div className="text-xs text-slate-500">{product.company.name}</div>
+                      )}
                     </td>
                     <td className="px-3 py-4 font-mono text-xs">{product.sku}</td>
                     <td className="px-3 py-4">{product.unit}</td>
-                    <td className="px-3 py-4 font-medium text-slate-900">
-                      {formatNumber(stockByProductId[product.id] ?? 0)}
-                    </td>
                     <td className="px-3 py-4">{formatCurrency(product.buyPrice)}</td>
                     <td className="px-3 py-4">{formatCurrency(product.salePrice)}</td>
                     <td className="px-3 py-4">
@@ -453,8 +438,14 @@ export function ProductsPage() {
             <button
               type="submit"
               disabled={isSaving}
-              className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+              className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60 flex items-center justify-center gap-2 cursor-pointer"
             >
+              {isSaving && (
+                <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
               {isSaving ? 'Saving...' : editingProduct ? 'Update product' : 'Add product'}
             </button>
             {editingProduct ? (

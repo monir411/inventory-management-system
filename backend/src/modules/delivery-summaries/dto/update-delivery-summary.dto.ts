@@ -16,20 +16,37 @@ export class UpdateDeliverySummaryItemDto {
 
   @IsNumber()
   @Min(0)
-  returnQuantity: number;
+  returnedQty: number;
 
   @IsOptional()
   @IsString()
   remarks?: string;
+
+  @IsOptional()
+  @IsNumber()
+  orderedQty?: number;
+
+  @IsOptional()
+  @IsNumber()
+  unitPrice?: number;
 }
 
 export class UpdateDeliverySummaryDto {
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => UpdateDeliverySummaryItemDto)
-  items: UpdateDeliverySummaryItemDto[];
+  items?: UpdateDeliverySummaryItemDto[];
+
+  @IsOptional()
+  @IsString()
+  status?: string;
 
   @IsOptional()
   @IsBoolean()
-  finalize?: boolean; // if true, status becomes COMPLETED and stock is updated
+  finalize?: boolean;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
 }

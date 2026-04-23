@@ -1,13 +1,12 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Company } from '../companies/entities/company.entity';
-import { Product } from '../products/entities/product.entity';
 import { StockMovement } from './entities/stock-movement.entity';
-import { StockController } from './stock.controller';
+import { Product } from '../products/entities/product.entity';
 import { StockService } from './stock.service';
+import { StockController } from './stock.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([StockMovement, Company, Product])],
+  imports: [TypeOrmModule.forFeature([StockMovement, Product])],
   controllers: [StockController],
   providers: [StockService],
   exports: [StockService],

@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
-import { OrdersListPage } from '@/components/sales/orders-list-page';
+import { AllOrdersPage } from '@/components/orders/all-orders-page';
 
 export default function OrdersRoute() {
   return (
     <Suspense fallback={<div>Loading orders page...</div>}>
-      <OrdersListPage />
+      <AllOrdersPage />
     </Suspense>
   );
 }

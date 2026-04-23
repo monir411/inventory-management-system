@@ -83,9 +83,17 @@ export async function apiRequest<T>(
     }
   }
 
-  if (response.status === 204) {
+  const text = await response.text();
+  if (!text) {
     return undefined as T;
   }
 
-  return (await response.json()) as T;
+  try {
+    return JSON.parse(text) as T;
+  } catch (error) {
+    if (!response.ok) {
+      throw new ApiError(text || `Request failed with status ${response.status}`, response.status);
+    }
+    return text as unknown as T;
+  }
 }

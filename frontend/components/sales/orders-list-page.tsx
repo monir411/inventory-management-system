@@ -13,7 +13,8 @@ import { formatCurrency, formatDate } from '@/lib/utils/format';
 import Link from 'next/link';
 import { 
   Search, Calendar, Building2, MapPin, 
-  Store, Trash2, Edit3, ChevronRight, Download
+  Store, Trash2, Edit3, ChevronRight, Download,
+  ShoppingCart, Package, Truck
 } from 'lucide-react';
 
 const PAGE_SIZE = 15;
@@ -122,21 +123,59 @@ export function OrdersListPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      {/* Header & Main Navigation Hub */}
+      <div className="grid gap-6 md:grid-cols-3">
+        {[
+          { 
+            href: '/sales/create', 
+            label: 'New Order', 
+            desc: 'Create a new customer invoice', 
+            icon: ShoppingCart, 
+            color: 'bg-indigo-600 shadow-indigo-200' 
+          },
+          { 
+            href: '/delivery-summaries/create', 
+            label: 'Morning Prep', 
+            desc: 'Aggregate today\'s orders', 
+            icon: Package, 
+            color: 'bg-amber-500 shadow-amber-200' 
+          },
+          { 
+            href: '/delivery-summaries', 
+            label: 'Delivery List', 
+            desc: 'View & finalize summaries', 
+            icon: Truck, 
+            color: 'bg-slate-900 shadow-slate-200' 
+          },
+        ].map((btn) => (
+          <Link
+            key={btn.href}
+            href={btn.href}
+            className={`group relative overflow-hidden rounded-[2rem] p-6 text-white shadow-xl transition-all hover:-translate-y-1 ${btn.color}`}
+          >
+            <div className="relative z-10">
+              <div className="mb-4 inline-flex rounded-2xl bg-white/20 p-3 backdrop-blur-md">
+                <btn.icon className="h-6 w-6" />
+              </div>
+              <h3 className="text-xl font-black">{btn.label}</h3>
+              <p className="mt-1 text-sm font-medium opacity-80">{btn.desc}</p>
+            </div>
+            <div className="absolute -right-4 -bottom-4 opacity-10 transition-transform group-hover:scale-110">
+              <btn.icon className="h-32 w-32" />
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between pt-4">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-900">All Orders</h1>
-          <p className="text-sm text-slate-500">Manage and track all customer orders and invoices.</p>
+          <h2 className="text-2xl font-black tracking-tight text-slate-900">Order History</h2>
+          <p className="text-sm text-slate-500">Track delivery status and payments for all orders.</p>
         </div>
         <div className="flex items-center gap-3">
           <button className="inline-flex items-center gap-2 rounded-2xl bg-white border border-slate-200 px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition-all hover:bg-slate-50">
-            <Download className="h-4 w-4" /> Export
+            <Download className="h-4 w-4" /> Export Data
           </button>
-          <Link
-            href="/sales/create"
-            className="inline-flex items-center gap-2 rounded-2xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 transition-all hover:-translate-y-0.5 hover:bg-indigo-700"
-          >
-            Create New Order
-          </Link>
         </div>
       </div>
 
@@ -286,11 +325,20 @@ export function OrdersListPage() {
                       )}
                     </td>
                     <td className="px-6 py-4 text-center">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-wider ${
-                        sale.dueAmount > 0 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'
-                      }`}>
-                        {sale.dueAmount > 0 ? 'Partial' : 'Paid'}
-                      </span>
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${
+                          sale.dueAmount > 0 ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {sale.dueAmount > 0 ? 'Partial/Due' : 'Paid'}
+                        </span>
+                        {sale.deliveryStatus === 'DELIVERED' ? (
+                          <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-700">Delivered</span>
+                        ) : sale.deliveryStatus === 'SHIPPED' ? (
+                          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-700">Shipped</span>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-400">Pending</span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">

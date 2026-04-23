@@ -1,65 +1,45 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  Index,
-  JoinColumn,
-  ManyToOne,
-  PrimaryGeneratedColumn,
-  UpdateDateColumn,
-} from 'typeorm';
-import { numericColumnTransformer } from '../../../common/database/numeric.transformer';
-import { Company } from '../../companies/entities/company.entity';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Product } from '../../products/entities/product.entity';
-import { StockMovementType } from '../enums/stock-movement-type.enum';
+import { Company } from '../../companies/entities/company.entity';
+import { StockMovementType } from '../stock.constants';
 
-@Entity({ name: 'stock_movements' })
-@Index(['companyId', 'productId', 'movementDate'])
+
+@Entity('stock_movements')
 export class StockMovement {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
-  companyId: number;
-
+  @Index()
   @Column()
   productId: number;
 
-  @Column({
-    type: 'enum',
-    enum: StockMovementType,
-  })
-  type: StockMovementType;
+  @ManyToOne(() => Product)
+  @JoinColumn({ name: 'productId' })
+  product: Product;
 
-  @Column({
-    type: 'decimal',
-    precision: 14,
-    scale: 3,
-    transformer: numericColumnTransformer,
-  })
-  quantity: number;
+  @Index()
+  @Column()
+  companyId: number;
 
-  @Column({ type: 'text', nullable: true })
-  note: string | null;
-
-  @Column({ type: 'timestamptz' })
-  movementDate: Date;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
-
-  @ManyToOne(() => Company, (company) => company.stockMovements, {
-    onDelete: 'RESTRICT',
-  })
+  @ManyToOne(() => Company)
   @JoinColumn({ name: 'companyId' })
   company: Company;
 
-  @ManyToOne(() => Product, (product) => product.stockMovements, {
-    onDelete: 'RESTRICT',
-  })
-  @JoinColumn({ name: 'productId' })
-  product: Product;
+  @Column({ type: 'enum', enum: StockMovementType })
+  type: StockMovementType;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  quantity: number; // Positive for in, negative for out/damage
+
+  @Column({ type: 'varchar', nullable: true })
+  note: string;
+
+  @Column({ type: 'varchar', nullable: true })
+  reference: string; // Order ID, Invoice number, etc.
+
+  @Column({ type: 'varchar', nullable: true })
+  user: string; // The person who performed the action
+
+  @CreateDateColumn()
+  createdAt: Date;
 }

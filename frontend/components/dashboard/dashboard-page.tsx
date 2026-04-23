@@ -10,7 +10,7 @@ import { canViewProfit } from '@/lib/utils/permissions';
 import {
   ShoppingCart, TrendingUp, Wallet, Clock, Package, Layers,
   AlertTriangle, AlertCircle, DollarSign, Box, BarChart2,
-  ArrowRight, Building2, CheckCircle2, Receipt,
+  ArrowRight, Building2, CheckCircle2, Receipt, Truck,
 } from 'lucide-react';
 
 /* ─── tiny helpers ─── */
@@ -182,14 +182,14 @@ export function DashboardPage() {
       {/* ── ROW 1: Today KPIs ── */}
       <div>
         <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">Today</p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard label="Today Sales"      value={formatCurrency(todaySales.data?.totalAmount ?? 0)}  sub={`${todaySales.data?.saleCount ?? 0} invoices`}    icon={<ShoppingCart className="h-5 w-5" />} accent="blue" href={`/sales?fromDate=${todayStr}&toDate=${todayStr}`} />
           <KpiCard label="Today Orders"     value={formatNumber(todaySales.data?.saleCount ?? 0)}       sub="Invoices today"                                    icon={<Receipt      className="h-5 w-5" />} accent="violet" href={`/sales?fromDate=${todayStr}&toDate=${todayStr}`} />
           {showProfit && (
             <KpiCard label="Today Profit"   value={formatCurrency(todayProfit.data?.totalProfit ?? 0)} sub="Net margin today"                                  icon={<TrendingUp   className="h-5 w-5" />} accent="emerald" />
           )}
           <KpiCard label="Collection"       value={formatCurrency(dueOverview.data?.todayPaid ?? 0)}   sub={`${collectionRate}% efficiency`}                   icon={<Wallet       className="h-5 w-5" />} accent="rose" />
-          <KpiCard label="Total Orders"     value={formatNumber(recentSales.data?.totalItems ?? 0)}    sub="All-time orders"                                   icon={<Layers       className="h-5 w-5" />} accent="slate" href="/sales" />
+          <KpiCard label="Delivery Status"  value="Today"                                             sub="Track progress"                                   icon={<Truck        className="h-5 w-5" />} accent="amber" href="/delivery-summaries" />
         </div>
       </div>
 
@@ -284,7 +284,7 @@ export function DashboardPage() {
                 <h3 className="text-base font-bold text-slate-900">Recent Sales</h3>
                 <p className="text-xs text-slate-500">Latest 10 invoices</p>
               </div>
-              <Link href="/sales" className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline">
+              <Link href="/orders" className="flex items-center gap-1 text-xs font-bold text-indigo-600 hover:underline">
                 View all <ArrowRight className="h-3 w-3" />
               </Link>
             </div>
@@ -314,11 +314,18 @@ export function DashboardPage() {
                       <td className="px-5 py-3.5 text-right text-sm font-bold text-slate-900">
                         {formatCurrency(sale.totalAmount)}
                       </td>
-                      <td className="px-5 py-3.5 text-right">
+                      <td className="px-5 py-3.5 text-right flex flex-col items-end gap-1.5">
                         {sale.dueAmount > 0
-                          ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-700">Due</span>
+                          ? <span className="rounded-full bg-rose-100 px-2.5 py-1 text-[10px] font-black uppercase text-rose-700">Due</span>
                           : <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-700">Paid</span>
                         }
+                        {sale.deliveryStatus === 'DELIVERED' ? (
+                          <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[10px] font-black uppercase text-indigo-700">Delivered</span>
+                        ) : sale.deliveryStatus === 'SHIPPED' ? (
+                          <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[10px] font-black uppercase text-amber-700">Shipped</span>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-400">Pending</span>
+                        )}
                       </td>
                     </tr>
                   ))}

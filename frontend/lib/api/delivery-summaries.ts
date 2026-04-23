@@ -1,46 +1,66 @@
-
-import {
-  CreateDeliverySummaryPayload,
-  DeliverySummariesQuery,
-  DeliverySummary,
-  PaginatedResponse,
-  UpdateDeliverySummaryPayload,
-} from '@/types/api';
 import { apiRequest } from './client';
+import type { PaginatedResponse } from '@/types/api';
 
-export async function createDeliverySummary(
-  payload: CreateDeliverySummaryPayload,
-): Promise<DeliverySummary> {
-  return apiRequest<DeliverySummary>('delivery-summaries', {
+export interface DeliverySummary {
+  id: number;
+  deliveryDate: string;
+  companyId: number;
+  company: { name: string };
+  routeId: number;
+  route: { name: string };
+  status: 'DRAFT' | 'COMPLETED';
+  morningPrinted: boolean;
+  finalPrinted: boolean;
+  totalAmount: number;
+  note?: string;
+  items: DeliverySummaryItem[];
+  createdAt: string;
+}
+
+export interface DeliverySummaryItem {
+  id: number;
+  productId: number;
+  product: { name: string; unit: string };
+  orderedQuantity: number;
+  returnedQuantity: number;
+  soldQuantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export function getDeliverySummaries(query: any = {}) {
+  return apiRequest<PaginatedResponse<DeliverySummary>>('delivery-summaries', {
+    query,
+  });
+}
+
+export function getDeliverySummary(id: number) {
+  return apiRequest<DeliverySummary>(`delivery-summaries/${id}`);
+}
+
+export function syncDeliverySummary(payload: { date: string, companyId: number, routeId: number }) {
+  return apiRequest<DeliverySummary>('delivery-summaries/sync', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-export async function getDeliverySummaries(
-  query?: DeliverySummariesQuery,
-): Promise<PaginatedResponse<DeliverySummary>> {
-  return apiRequest<PaginatedResponse<DeliverySummary>>('delivery-summaries', {
-    query: query as Record<string, string | number | boolean | undefined>,
-  });
-}
-
-export async function getDeliverySummary(id: number): Promise<DeliverySummary> {
-  return apiRequest<DeliverySummary>(`delivery-summaries/${id}`);
-}
-
-export async function updateDeliverySummary(
-  id: number,
-  payload: UpdateDeliverySummaryPayload,
-): Promise<DeliverySummary> {
-  return apiRequest<DeliverySummary>(`delivery-summaries/${id}`, {
+export function updateDeliveryReturns(id: number, items: { productId: number, returnedQuantity: number }[]) {
+  return apiRequest<DeliverySummary>(`delivery-summaries/${id}/returns`, {
     method: 'PATCH',
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ items }),
   });
 }
 
-export async function deleteDeliverySummary(id: number): Promise<void> {
-  return apiRequest<void>(`delivery-summaries/${id}`, {
+export function markDeliveryAsPrinted(id: number, mode: 'morning' | 'final') {
+  return apiRequest<DeliverySummary>(`delivery-summaries/${id}/print`, {
+    method: 'PATCH',
+    query: { mode },
+  });
+}
+
+export function deleteDeliverySummary(id: number) {
+  return apiRequest<{ success: boolean }>(`delivery-summaries/${id}`, {
     method: 'DELETE',
   });
 }

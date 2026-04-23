@@ -143,8 +143,8 @@ export type DailySummaryReport = {
   grandTotalAmount: number;
 };
 
-export function getDailySummaryReport(query: { date?: string; companyId?: number; scope?: 'all' | 'company' }) {
-  return apiRequest<DailySummaryReport>('sales/reports/daily-summary', {
+export function getDailySummaryReport(query: { date?: string; companyId?: number; routeId?: number; scope?: 'all' | 'company' }) {
+  return apiRequest<DailySummaryReport>('delivery-summaries/reports/daily-summary', {
     query,
   });
 }

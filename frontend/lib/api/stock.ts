@@ -1,73 +1,38 @@
 import { apiRequest } from './client';
-import type {
-  CreateStockMovementPayload,
-  StockInvestmentSummary,
-  StockMovement,
-  StockMovementQuery,
-  StockSummaryItem,
-} from '@/types/api';
 
-export function getStockSummary(companyId?: number, search?: string) {
-  return apiRequest<StockSummaryItem[]>('stock/summary/current', {
-    query: { companyId, search },
-  });
+export type StockMovementType = 'OPENING' | 'STOCK_IN' | 'STOCK_OUT' | 'ADJUSTMENT' | 'RETURN_IN' | 'DAMAGE' | 'SALE';
+
+export interface CreateStockMovementPayload {
+  productId: number;
+  companyId: number;
+  type: StockMovementType;
+  quantity: number;
+  note?: string;
+  reference?: string;
 }
 
-export function getLowStockProducts(
-  companyId?: number,
-  threshold = 10,
-  search?: string,
-) {
-  return apiRequest<StockSummaryItem[]>('stock/summary/low-stock', {
-    query: { companyId, threshold, search },
-  });
-}
-
-export function getZeroStockProducts(companyId?: number, search?: string) {
-  return apiRequest<StockSummaryItem[]>('stock/summary/zero-stock', {
-    query: { companyId, search },
-  });
-}
-
-export function getStockInvestmentSummary(companyId?: number, search?: string) {
-  return apiRequest<StockInvestmentSummary>('stock/summary/investment', {
-    query: { companyId, search },
-  });
-}
-
-export function getStockMovements(
-  companyId?: number,
-  query: StockMovementQuery = {},
-) {
-  return apiRequest<StockMovement[]>('stock/movements', {
-    query: { companyId, ...query },
-  });
-}
-
-export function addOpeningStock(payload: CreateStockMovementPayload) {
-  return apiRequest('stock/opening', {
+export function createStockMovement(payload: CreateStockMovementPayload) {
+  return apiRequest('stock/movements', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
 }
 
-export function addStockIn(payload: CreateStockMovementPayload) {
-  return apiRequest('stock/in', {
-    method: 'POST',
-    body: JSON.stringify(payload),
+export function getStockHistory(params: {
+  companyId?: number;
+  productId?: number;
+  type?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}) {
+  return apiRequest('stock/history', {
+    query: params as Record<string, any>,
   });
 }
 
-export function addAdjustment(payload: CreateStockMovementPayload) {
-  return apiRequest('stock/adjustment', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export function addDamage(payload: CreateStockMovementPayload) {
-  return apiRequest('stock/damage', {
-    method: 'POST',
-    body: JSON.stringify(payload),
+export function getStockSummary(companyId?: number) {
+  return apiRequest('stock/summary', {
+    query: companyId ? { companyId } : {},
   });
 }

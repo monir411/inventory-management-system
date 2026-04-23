@@ -1,53 +1,52 @@
-import {
-  Body,
-  Controller,
-  Delete,
-  Get,
-  Param,
-  ParseIntPipe,
-  Patch,
-  Post,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, ParseIntPipe } from '@nestjs/common';
 import { DeliverySummariesService } from './delivery-summaries.service';
-import { CreateDeliverySummaryDto } from './dto/create-delivery-summary.dto';
-import { QueryDeliverySummariesDto } from './dto/query-delivery-summaries.dto';
-import { UpdateDeliverySummaryDto } from './dto/update-delivery-summary.dto';
 
-@UseGuards(JwtAuthGuard)
 @Controller('delivery-summaries')
 export class DeliverySummariesController {
-  constructor(
-    private readonly deliverySummariesService: DeliverySummariesService,
-  ) {}
-
-  @Post()
-  create(@Body() createDto: CreateDeliverySummaryDto) {
-    return this.deliverySummariesService.create(createDto);
-  }
+  constructor(private readonly service: DeliverySummariesService) {}
 
   @Get()
-  findAll(@Query() query: QueryDeliverySummariesDto) {
-    return this.deliverySummariesService.findAll(query);
+  findAll(@Query() query: any) {
+    return this.service.findAll(query);
   }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
-    return this.deliverySummariesService.findOne(id);
+    return this.service.findOne(id);
   }
 
-  @Patch(':id')
-  update(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() updateDto: UpdateDeliverySummaryDto,
+  @Get('reports/daily-summary')
+  getDailyReport(
+    @Query('date') date: string,
+    @Query('companyId') companyId?: number,
+    @Query('routeId') routeId?: number
   ) {
-    return this.deliverySummariesService.update(id, updateDto);
+    return this.service.getDailyReport(date, companyId, routeId);
+  }
+
+  @Post('sync')
+  syncOrders(@Body() dto: { date: string, companyId: number, routeId: number }) {
+    return this.service.syncOrders(dto.date, dto.companyId, dto.routeId);
+  }
+
+  @Patch(':id/returns')
+  updateReturns(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { items: { productId: number, returnedQuantity: number }[] }
+  ) {
+    return this.service.updateReturns(id, dto.items);
+  }
+
+  @Patch(':id/print')
+  markAsPrinted(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('mode') mode: 'morning' | 'final'
+  ) {
+    return this.service.markAsPrinted(id, mode);
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.deliverySummariesService.remove(id);
+  delete(@Param('id', ParseIntPipe) id: number) {
+    return this.service.delete(id);
   }
 }
