@@ -198,28 +198,50 @@ export function AllOrdersPage() {
       </div>
 
       {/* Stats Section */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
         {[
-          { label: 'Total Orders', value: stats?.totalOrders, icon: LayoutGrid, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'Today', value: stats?.todayOrders, icon: Calendar, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-          { label: 'Total Amount', value: formatCurrency(stats?.totalAmount || 0), icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50', span: 'col-span-1' },
-          { label: 'Pending', value: stats?.pending, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-          { label: 'Confirmed', value: stats?.confirmed, icon: CheckCircle, color: 'text-indigo-500', bg: 'bg-indigo-50' },
-          { label: 'Delivered', value: stats?.delivered, icon: ShoppingCart, color: 'text-emerald-500', bg: 'bg-emerald-50' },
-          { label: 'Cancelled', value: stats?.cancelled, icon: XCircle, color: 'text-rose-500', bg: 'bg-rose-50' },
-        ].map((s, i) => (
-          <div key={i} className={`rounded-3xl bg-white p-5 shadow-sm border border-slate-100 flex flex-col justify-between group transition-all hover:shadow-md ${s.span || ''}`}>
-            <div className={`mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl ${s.bg} ${s.color}`}>
-              <s.icon className="h-5 w-5" />
+          { label: 'Total Orders', val: stats?.totalOrders, color: 'text-slate-600', bg: 'bg-slate-50', unit: 'Orders' },
+          { label: 'Today Orders', val: stats?.todayOrders, color: 'text-indigo-600', bg: 'bg-indigo-50', unit: 'Orders' },
+          { label: 'Order Value', val: stats?.totalOrderValue, color: 'text-blue-600', bg: 'bg-blue-50', isMoney: true },
+          { label: 'Today Order Value', val: stats?.todayOrderValue, color: 'text-sky-600', bg: 'bg-sky-50', isMoney: true },
+          { label: 'Waiting Orders', val: stats?.waitingOrders, color: 'text-amber-600', bg: 'bg-amber-50', unit: 'Orders' },
+          { label: 'Total Dispatch', val: stats?.totalDispatch, color: 'text-cyan-600', bg: 'bg-cyan-50', unit: 'Orders' },
+          { label: 'Today Dispatch', val: stats?.todayDispatch, color: 'text-teal-600', bg: 'bg-teal-50', unit: 'Orders' },
+          
+          { label: 'Total Settlement', val: stats?.totalSettlement, color: 'text-violet-600', bg: 'bg-violet-50', unit: 'Orders' },
+          { label: 'Today Settlement', val: stats?.todaySettlement, color: 'text-purple-600', bg: 'bg-purple-50', unit: 'Orders' },
+          { label: 'Final Delivery Amount', val: stats?.totalFinalAmount, color: 'text-emerald-600', bg: 'bg-emerald-50', isMoney: true },
+          { label: 'Today Final Amount', val: stats?.todayFinalAmount, color: 'text-green-600', bg: 'bg-green-50', isMoney: true },
+          { label: 'Due Collection', val: stats?.dueCollection, color: 'text-orange-600', bg: 'bg-orange-50', isMoney: true },
+          { label: 'Cancelled Orders', val: stats?.totalCancelled, color: 'text-rose-600', bg: 'bg-rose-50', unit: 'Orders' },
+          { label: 'Today Cancelled', val: stats?.todayCancelled, color: 'text-pink-600', bg: 'bg-pink-50', unit: 'Orders' },
+        ].map((kpi, idx) => {
+          const safeNumber = (value: any) => {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : 0;
+          };
+
+          const amount = safeNumber(kpi.val);
+          const displayValue = kpi.isMoney 
+            ? `BDT ${amount.toLocaleString("en-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : amount.toLocaleString("en-BD");
+
+          return (
+            <div key={idx} className={`${kpi.bg} rounded-2xl p-4 border border-white/40 shadow-sm flex flex-col justify-between h-full transition-all hover:shadow-md hover:scale-[1.02]`}>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{kpi.label}</p>
+                <p className={`mt-1.5 text-lg font-black truncate ${kpi.color}`}>
+                  {isStatsLoading ? '...' : displayValue}
+                </p>
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-[9px] font-bold text-slate-400 opacity-60">
+                  {kpi.unit || (kpi.isMoney ? 'BDT' : '')}
+                </span>
+              </div>
             </div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">{s.label}</p>
-              <h3 className="mt-1 text-xl font-black text-slate-900 group-hover:scale-105 transition-transform origin-left">
-                {isStatsLoading ? '...' : s.value}
-              </h3>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Filter Bar */}

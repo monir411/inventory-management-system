@@ -67,17 +67,6 @@ export class OrdersService {
       
       for (const item of items) {
         item.orderId = savedOrder.id;
-        // Create stock movement for each item
-        const movement = manager.create(StockMovement, {
-          productId: item.productId,
-          companyId: order.companyId,
-          type: StockMovementType.SALE,
-          quantity: -(Number(item.quantity) + Number(item.freeQuantity || 0)),
-          reference: `Order #${savedOrder.id}`,
-          user: 'Admin',
-          note: `Auto-deducted for order creation`,
-        });
-        await manager.save(movement);
       }
       await manager.save(items);
 
@@ -137,25 +126,76 @@ export class OrdersService {
 
   async getStats() {
     const allOrders = await this.ordersRepository.find();
-    const today = new Date().toISOString().split('T')[0];
+    
+    // Get start of today in local time for comparisons
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const todayStr = today.toISOString().split('T')[0];
 
-    const countByStatus = (status: OrderStatus) =>
-      allOrders.filter((order) => order.status === status).length;
+    const safeNum = (val: any) => {
+      const n = Number(val);
+      return isFinite(n) ? n : 0;
+    };
+
+    const isToday = (date: Date | string | undefined) => {
+      if (!date) return false;
+      const d = new Date(date);
+      return d.toISOString().split('T')[0] === todayStr;
+    };
+
+    // Card 1: Total Orders
+    const totalOrders = allOrders.length;
+    
+    // Card 2: Today Orders
+    const todayOrders = allOrders.filter(o => isToday(o.orderDate)).length;
+    
+    // Card 3 & 4: Order Value
+    const totalOrderValue = allOrders.reduce((sum, o) => 
+      sum + (o.status === OrderStatus.SETTLED ? safeNum(o.actualSoldAmount) : safeNum(o.grandTotal)), 0);
+    const todayOrderValue = allOrders.filter(o => isToday(o.orderDate)).reduce((sum, o) => 
+      sum + (o.status === OrderStatus.SETTLED ? safeNum(o.actualSoldAmount) : safeNum(o.grandTotal)), 0);
+
+    // Card 5 & 6: Dispatch
+    const dispatchStatuses = [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.SETTLED];
+    const totalDispatch = allOrders.filter(o => dispatchStatuses.includes(o.status)).length;
+    const todayDispatch = allOrders.filter(o => isToday(o.dispatchedAt)).length;
+
+    // Card 7 & 8: Settlement
+    const totalSettlement = allOrders.filter(o => o.status === OrderStatus.SETTLED).length;
+    const todaySettlement = allOrders.filter(o => isToday(o.settledAt)).length;
+
+    // Card 9 & 10: Final Delivery Amount
+    const totalFinalAmount = allOrders.filter(o => o.status === OrderStatus.SETTLED).reduce((sum, o) => 
+      sum + safeNum(o.actualSoldAmount), 0);
+    const todayFinalAmount = allOrders.filter(o => o.status === OrderStatus.SETTLED && isToday(o.settledAt)).reduce((sum, o) => 
+      sum + safeNum(o.actualSoldAmount), 0);
+
+    // Card 11 & 12: Cancelled
+    const totalCancelled = allOrders.filter(o => o.status === OrderStatus.CANCELLED).length;
+    const todayCancelled = allOrders.filter(o => o.status === OrderStatus.CANCELLED && isToday(o.orderDate)).length; // Using orderDate for cancelled today? or updatedAt? User usually means orderDate.
+
+    // Card 13: Waiting Orders (Confirmed or Assigned but not dispatched)
+    const waitingOrders = allOrders.filter(o => [OrderStatus.CONFIRMED, OrderStatus.ASSIGNED].includes(o.status)).length;
+
+    // Card 14: Due Collection (From settled orders)
+    const dueCollection = allOrders.filter(o => o.status === OrderStatus.SETTLED).reduce((sum, o) => 
+      sum + safeNum(o.dueAmount), 0);
 
     return {
-      totalOrders: allOrders.length,
-      todayOrders: allOrders.filter(
-        (order) => new Date(order.orderDate).toISOString().split('T')[0] === today,
-      ).length,
-      totalAmount: allOrders.reduce((sum, order) => sum + Number(order.grandTotal), 0),
-      pending: countByStatus(OrderStatus.DRAFT),
-      confirmed: countByStatus(OrderStatus.CONFIRMED),
-      assigned: countByStatus(OrderStatus.ASSIGNED),
-      outForDelivery: countByStatus(OrderStatus.OUT_FOR_DELIVERY),
-      delivered: countByStatus(OrderStatus.DELIVERED),
-      partial: countByStatus(OrderStatus.PARTIALLY_DELIVERED),
-      settled: countByStatus(OrderStatus.SETTLED),
-      cancelled: countByStatus(OrderStatus.CANCELLED),
+      totalOrders,
+      todayOrders,
+      totalOrderValue,
+      todayOrderValue,
+      totalDispatch,
+      todayDispatch,
+      totalSettlement,
+      todaySettlement,
+      totalFinalAmount,
+      todayFinalAmount,
+      totalCancelled,
+      todayCancelled,
+      waitingOrders,
+      dueCollection
     };
   }
 
@@ -343,17 +383,6 @@ export class OrdersService {
 
       for (const item of items) {
         item.orderId = id;
-        // Re-create stock movement
-        const movement = manager.create(StockMovement, {
-          productId: item.productId,
-          companyId: dto.companyId,
-          type: StockMovementType.SALE,
-          quantity: -(Number(item.quantity) + Number(item.freeQuantity || 0)),
-          reference: `Order #${id}`,
-          user: 'Admin',
-          note: `Auto-updated for order modification`,
-        });
-        await manager.save(movement);
       }
       await manager.save(items);
 
@@ -370,7 +399,7 @@ export class OrdersService {
       throw new BadRequestException('Dispatched orders cannot be deleted');
     }
     return this.dataSource.transaction(async (manager) => {
-      // Restore stock
+      // Restore stock movements (if any direct ones were created)
       await manager.delete(StockMovement, { reference: `Order #${id}` });
       // Delete order (cascades or manual delete items)
       await manager.delete(OrderItem, { orderId: id });

@@ -388,6 +388,7 @@ export class DeliveryOpsService {
             note: `Dispatch batch ${batch.batchNo} issued to market`,
           },
           'Dispatch',
+          manager,
         );
       }
 
@@ -535,6 +536,7 @@ export class DeliveryOpsService {
                 note: `Returned from dispatch batch ${batch.batchNo}`,
               },
               'Dispatch Return',
+              manager,
             );
           }
 
@@ -550,7 +552,8 @@ export class DeliveryOpsService {
               }),
             );
 
-            // Quantity remains out of sellable stock because it was issued during dispatch.
+            // Damaged items remain out of sellable stock (already deducted at dispatch).
+            // We record a 0-quantity movement just for the audit trail of the damage event.
             await this.stockService.create(
               {
                 productId: itemEntry.productId,
@@ -561,6 +564,7 @@ export class DeliveryOpsService {
                 note: `Damaged ${damagedQuantity} unit(s) in dispatch batch ${batch.batchNo}`,
               },
               'Dispatch Damage',
+              manager,
             );
           }
 

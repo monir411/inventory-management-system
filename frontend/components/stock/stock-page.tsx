@@ -127,22 +127,51 @@ export function StockPage() {
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
         {[
           { label: 'Products', val: summary?.totalProducts, color: 'text-slate-600', bg: 'bg-slate-50' },
-          { label: 'Total Qty', val: formatNumber(summary?.totalStockQty), color: 'text-cyan-600', bg: 'bg-cyan-50' },
-          { label: 'Value', val: formatCurrency(summary?.totalStockValue), color: 'text-emerald-600', bg: 'bg-emerald-50' },
+          { label: 'Total Qty', val: summary?.totalStockQty, color: 'text-cyan-600', bg: 'bg-cyan-50', unit: 'Qty' },
+          { label: 'Stock Value', val: summary?.totalStockValue, color: 'text-emerald-600', bg: 'bg-emerald-50', isMoney: true },
           { label: 'Low Stock', val: summary?.lowStockCount, color: 'text-amber-600', bg: 'bg-amber-50' },
           { label: 'Out of Stock', val: summary?.outOfStockCount, color: 'text-rose-600', bg: 'bg-rose-50' },
-          { label: 'Today In', val: summary?.todayStockIn, color: 'text-indigo-600', bg: 'bg-indigo-50' },
-          { label: 'Today Out', val: summary?.todayStockOut, color: 'text-pink-600', bg: 'bg-pink-50' },
-        ].map((kpi, idx) => (
-          <div key={idx} className={`${kpi.bg} rounded-2xl p-4 border border-white/20 shadow-sm`}>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{kpi.label}</p>
-            <p className={`mt-2 text-xl font-bold ${kpi.color}`}>{kpi.val}</p>
-          </div>
-        ))}
+          
+          { label: 'Today Sold', val: summary?.todaySoldQty, color: 'text-indigo-600', bg: 'bg-indigo-50', unit: 'Qty', isSettled: true },
+          { label: 'Today Return', val: summary?.todayReturnQty, color: 'text-sky-600', bg: 'bg-sky-50', unit: 'Qty', isSettled: true },
+          { label: 'Total Sold', val: summary?.totalSoldQtyAllTime, color: 'text-violet-600', bg: 'bg-violet-50', unit: 'All Time', isSettled: true },
+          { label: 'Total Return', val: summary?.totalReturnQtyAllTime, color: 'text-blue-600', bg: 'bg-blue-50', unit: 'All Time', isSettled: true },
+          { label: 'Total Delivery', val: summary?.totalDeliveryAmountAllTime, color: 'text-pink-600', bg: 'bg-pink-50', isMoney: true, isSettled: true },
+        ].map((kpi, idx) => {
+          const safeNumber = (value: any) => {
+            const num = Number(value);
+            return Number.isFinite(num) ? num : 0;
+          };
+
+          const amount = safeNumber(kpi.val);
+          const displayValue = kpi.isMoney 
+            ? `BDT ${amount.toLocaleString("en-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            : amount.toLocaleString("en-BD");
+
+          return (
+            <div key={idx} className={`${kpi.bg} rounded-2xl p-4 border border-white/40 shadow-sm flex flex-col justify-between h-full`}>
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{kpi.label}</p>
+                <p className={`mt-1.5 text-lg font-bold truncate ${kpi.color}`}>{displayValue}</p>
+              </div>
+              <div className="flex justify-between items-center mt-1">
+                <span className="text-[9px] font-bold text-slate-400 opacity-60">
+                  {kpi.unit || (kpi.isMoney ? 'BDT' : '')}
+                </span>
+                {kpi.isSettled && (
+                  <span className="text-[8px] font-medium text-slate-400 italic">
+                    Settled
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
+      <p className="text-[10px] text-slate-400 px-2 italic -mt-3">* Based on settled deliveries only.</p>
 
       {/* Quick Actions */}
       <div className="flex flex-wrap gap-3">
