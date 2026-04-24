@@ -32,7 +32,13 @@ export class StockController {
   }
 
   @Get('summary')
-  getSummary(@Query('companyId') companyId?: string) {
-    return this.stockService.getSummary(companyId ? Number(companyId) : undefined);
+  getSummary(
+    @Query('companyId') companyId?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.stockService.getSummary(
+      companyId ? Number(companyId) : undefined,
+      search,
+    );
   }
 }

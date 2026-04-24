@@ -48,17 +48,25 @@ export class StockService {
     }
 
     if (query.search) {
-      qb.andWhere('(product.name LIKE :s OR product.sku LIKE :s)', { s: `%${query.search}%` });
+      qb.andWhere('(product.name ILIKE :s OR product.sku ILIKE :s)', { s: `%${query.search}%` });
     }
 
     return qb.getMany();
   }
 
-  async getSummary(companyId?: number) {
-    const products = await this.productRepository.find({
-      where: companyId ? { companyId } : {},
-      relations: ['company'],
-    });
+  async getSummary(companyId?: number, search?: string) {
+    const qb = this.productRepository.createQueryBuilder('p')
+      .leftJoinAndSelect('p.company', 'company');
+      
+    if (companyId) {
+      qb.andWhere('p.companyId = :companyId', { companyId });
+    }
+    
+    if (search) {
+      qb.andWhere('(p.name ILIKE :s OR p.sku ILIKE :s)', { s: `%${search}%` });
+    }
+    
+    const products = await qb.getMany();
 
     const movements = await this.movementRepository.find({
       where: companyId ? { companyId } : {},
@@ -76,12 +84,12 @@ export class StockService {
 
     const summary = {
       totalProducts: products.length,
-      totalStockQty: Array.from(stockMap.values()).reduce((a, b) => a + b, 0),
+      totalStockQty: products.reduce((sum, p) => sum + (stockMap.get(p.id) || 0), 0),
       totalStockValue: products.reduce((sum, p) => sum + ((stockMap.get(p.id) || 0) * p.buyPrice), 0),
       lowStockCount: products.filter(p => (stockMap.get(p.id) || 0) > 0 && (stockMap.get(p.id) || 0) <= 10).length,
       outOfStockCount: products.filter(p => (stockMap.get(p.id) || 0) <= 0).length,
-      todayStockIn: todayMovements.filter(m => Number(m.quantity) > 0).reduce((a, b) => a + Number(b.quantity), 0),
-      todayStockOut: Math.abs(todayMovements.filter(m => Number(m.quantity) < 0).reduce((a, b) => a + Number(b.quantity), 0)),
+      todayStockIn: todayMovements.filter(m => products.some(p => p.id === m.productId) && Number(m.quantity) > 0).reduce((a, b) => a + Number(b.quantity), 0),
+      todayStockOut: Math.abs(todayMovements.filter(m => products.some(p => p.id === m.productId) && Number(m.quantity) < 0).reduce((a, b) => a + Number(b.quantity), 0)),
     };
 
     const currentStockList = products.map(p => ({

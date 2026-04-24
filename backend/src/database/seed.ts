@@ -35,8 +35,8 @@ async function bootstrap() {
 
     // 1. Create Super Admin
     await usersService.createSuperAdmin({
-      email: 'admin@gmail.com',
-      password: '13663',
+      email: 'admin@erp.com',
+      password: 'password123',
       name: 'Super Admin',
     });
     logger.log('Super admin user created/verified');

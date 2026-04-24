@@ -7,6 +7,7 @@ import { getRoutes } from '@/lib/api/routes';
 import { getShops } from '@/lib/api/shops';
 import { getProducts } from '@/lib/api/products';
 import { getDeliveryPeople } from '@/lib/api/delivery-ops';
+import { getStockSummary } from '@/lib/api/stock';
 import { createOrder, getOrder, updateOrder } from '@/lib/api/orders';
 import { PageCard } from '@/components/ui/page-card';
 import { LoadingBlock } from '@/components/ui/loading-block';
@@ -41,6 +42,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
   const [shops, setShops] = useState<Shop[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [deliveryPeople, setDeliveryPeople] = useState<DeliveryPerson[]>([]);
+  const [stockMap, setStockMap] = useState<Record<number, number>>({});
 
   // Form Header
   const [orderDate, setOrderDate] = useState(() => {
@@ -163,6 +165,27 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
     return shops.filter(s => s.routeId === routeId);
   }, [shops, routeId]);
 
+  useEffect(() => {
+    async function loadStock() {
+      if (!companyId) {
+        setStockMap({});
+        return;
+      }
+      try {
+        const data = await getStockSummary(Number(companyId));
+        const list = data.currentStockList || [];
+        const map: Record<number, number> = {};
+        list.forEach((item: any) => {
+          map[item.id] = Number(item.currentStock || 0);
+        });
+        setStockMap(map);
+      } catch (e) {
+        console.error('Failed to load stock', e);
+      }
+    }
+    void loadStock();
+  }, [companyId]);
+
   // filteredProducts used inline in product dropdown
 
   const calculateLineTotal = (line: OrderLine) => {
@@ -235,6 +258,16 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
 
     if (lines.some(l => l.productId === 0)) {
       setError('Please select a product for all rows or remove empty rows');
+      return;
+    }
+
+    const insufficientStock = lines.find(l => {
+      const stock = stockMap[l.productId] || 0;
+      return (Number(l.quantity) + Number(l.freeQuantity)) > stock;
+    });
+
+    if (insufficientStock) {
+      setError(`Insufficient stock for ${insufficientStock.productName}. Available: ${stockMap[insufficientStock.productId] || 0}`);
       return;
     }
 
@@ -459,32 +492,44 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
                               p.sku.toLowerCase().includes((line.searchText || '').toLowerCase())
                             )
                             .map(p => (
-                              <button
-                                key={p.id}
-                                type="button"
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  // Always try to select company if it's empty
-                                  if (!companyId) {
-                                    setCompanyId(p.companyId);
-                                    const comp = companies.find(c => c.id === p.companyId);
-                                    if (comp) {
-                                      setCompSearch(comp.name);
+                                <button
+                                  key={p.id}
+                                  type="button"
+                                  disabled={(stockMap[p.id] || 0) <= 0}
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    if ((stockMap[p.id] || 0) <= 0) return;
+                                    // Always try to select company if it's empty
+                                    if (!companyId) {
+                                      setCompanyId(p.companyId);
+                                      const comp = companies.find(c => c.id === p.companyId);
+                                      if (comp) {
+                                        setCompSearch(comp.name);
+                                      }
                                     }
-                                  }
-                                  updateLine(idx, { 
-                                    productId: p.id, 
-                                    productName: p.name, 
-                                    unitPrice: p.salePrice,
-                                    showResults: false,
-                                    searchText: p.name
-                                  });
-                                }}
-                                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-50 transition border-b border-slate-50 last:border-0 cursor-pointer"
-                              >
+                                    updateLine(idx, { 
+                                      productId: p.id, 
+                                      productName: p.name, 
+                                      unitPrice: p.salePrice,
+                                      showResults: false,
+                                      searchText: p.name
+                                    });
+                                  }}
+                                  className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition border-b border-slate-50 last:border-0 ${
+                                    (stockMap[p.id] || 0) <= 0 ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:bg-slate-50 cursor-pointer'
+                                  }`}
+                                >
                                 <div className="flex-1">
                                   <div className="font-medium text-slate-900">{p.name}</div>
-                                  <div className="text-[10px] text-slate-400">{p.sku} | {p.company?.name}</div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-[10px] text-slate-400">{p.sku} | {p.company?.name}</span>
+                                    <span className={`text-[10px] font-bold ${
+                                      (stockMap[p.id] || 0) <= 0 ? 'text-rose-600' : 
+                                      (stockMap[p.id] || 0) <= 10 ? 'text-amber-600' : 'text-emerald-600'
+                                    }`}>
+                                      Stock: {stockMap[p.id] || 0}
+                                    </span>
+                                  </div>
                                 </div>
                                 <div className="text-emerald-600 font-bold">{formatCurrency(p.salePrice)}</div>
                               </button>
@@ -502,8 +547,15 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
                       placeholder="0"
                       value={line.quantity === 0 ? '' : line.quantity} 
                       onChange={e => updateLine(idx, { quantity: e.target.value === '' ? 0 : Number(e.target.value) })} 
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none transition" 
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-center focus:ring-1 outline-none transition ${
+                        line.productId && (Number(line.quantity) + Number(line.freeQuantity)) > (stockMap[line.productId] || 0)
+                          ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500 text-rose-600'
+                          : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900'
+                      }`} 
                     />
+                    {line.productId && (Number(line.quantity) + Number(line.freeQuantity)) > (stockMap[line.productId] || 0) && (
+                      <div className="text-[10px] font-bold text-rose-600 mt-1">Short: {(Number(line.quantity) + Number(line.freeQuantity)) - (stockMap[line.productId] || 0)}</div>
+                    )}
                   </td>
                   <td className="py-3 px-2">
                     <input 
@@ -511,7 +563,11 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
                       placeholder="0"
                       value={line.freeQuantity === 0 ? '' : line.freeQuantity} 
                       onChange={e => updateLine(idx, { freeQuantity: e.target.value === '' ? 0 : Number(e.target.value) })} 
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-center focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none transition" 
+                      className={`w-full rounded-lg border bg-white px-3 py-2 text-center focus:ring-1 outline-none transition ${
+                        line.productId && (Number(line.quantity) + Number(line.freeQuantity)) > (stockMap[line.productId] || 0)
+                          ? 'border-rose-500 focus:border-rose-500 focus:ring-rose-500 text-rose-600'
+                          : 'border-slate-200 focus:border-slate-900 focus:ring-slate-900'
+                      }`} 
                     />
                   </td>
                   <td className="py-3 px-2">

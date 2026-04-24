@@ -1,6 +1,7 @@
 import { Controller, Post, Body, Get, Param, ParseIntPipe, Query, Patch, Delete } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { SettleOrderDto } from './dto/settle-order.dto';
 import { OrderStatus } from './orders.constants';
 
 @Controller('orders')
@@ -42,6 +43,14 @@ export class OrdersController {
     @Body('status') status: OrderStatus,
   ) {
     return this.ordersService.updateStatus(id, status);
+  }
+
+  @Post(':id/settle')
+  settleOrder(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SettleOrderDto,
+  ) {
+    return this.ordersService.settleOrder(id, dto);
   }
 
   @Delete(':id')

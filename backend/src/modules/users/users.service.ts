@@ -76,10 +76,17 @@ export class UsersService {
 
   async createSuperAdmin(data: { email: string; password: '13663' | string; name: string }) {
     const existing = await this.userRepository.findOne({ where: { email: data.email } });
-    if (existing) return existing;
-
+    
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(data.password, salt);
+
+    if (existing) {
+      if (!existing.passwordHash) {
+        existing.passwordHash = passwordHash;
+        return this.userRepository.save(existing);
+      }
+      return existing;
+    }
 
     const user = this.userRepository.create({
       email: data.email,

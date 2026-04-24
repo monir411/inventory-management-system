@@ -3,10 +3,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Calendar, Filter, Download, 
-  Eye, Edit, Trash2, Printer, CheckCircle, 
+   Eye, Edit, Trash2, Printer, CheckCircle, 
   XCircle, Clock, Package, Building2, MapPin, 
   Store, ChevronRight, MoreVertical, LayoutGrid,
-  TrendingUp, ShoppingCart, AlertCircle, RefreshCw
+  TrendingUp, ShoppingCart, AlertCircle, RefreshCw,
+  Lock, ShieldAlert, CreditCard, Save
 } from 'lucide-react';
 import { PageCard } from '@/components/ui/page-card';
 import { Pagination } from '@/components/ui/pagination';
@@ -14,7 +15,7 @@ import { StateMessage } from '@/components/ui/state-message';
 import { useToast } from '@/components/ui/toast-provider';
 import { formatCurrency, formatDate } from '@/lib/utils/format';
 import { 
-  getOrders, getOrderStats, deleteOrder, updateOrderStatus 
+  getOrders, getOrderStats, deleteOrder, updateOrderStatus, settleOrder 
 } from '@/lib/api/orders';
 import { useCompanies, useRoutes, useShops } from '@/hooks/use-common-queries';
 import Link from 'next/link';
@@ -55,6 +56,7 @@ export function AllOrdersPage() {
 
   // Selection & Details
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
+  const [settleOrderTarget, setSettleOrderTarget] = useState<any>(null);
   const [isActionLoading, setIsActionLoading] = useState<number | null>(null);
 
   // Queries
@@ -456,7 +458,7 @@ export function AllOrdersPage() {
                             onClick={() => handleStatusUpdate(order.id, 'OUT_FOR_DELIVERY')}
                             disabled={isActionLoading === order.id}
                             className="rounded-xl bg-amber-50 p-2 text-amber-600 transition-all hover:bg-amber-100"
-                            title="Mark Out for Delivery"
+                            title="Start Delivery"
                           >
                             <Package className="h-4 w-4" />
                           </button>
@@ -471,35 +473,42 @@ export function AllOrdersPage() {
                             <ShoppingCart className="h-4 w-4" />
                           </button>
                         )}
-                        <Link
-                          href={`/orders/${order.id}/edit`}
-                          className="rounded-xl bg-slate-100 p-2 text-slate-600 transition-all hover:bg-slate-200 hover:text-blue-600"
-                          title="Edit"
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Link>
-                        <button
-                          onClick={() => {
-                            console.log('Cancelling order:', order.id);
-                            handleStatusUpdate(order.id, 'CANCELLED');
-                          }}
-                          disabled={isActionLoading === order.id}
-                          className="rounded-xl bg-rose-50 p-2 text-rose-600 transition-all hover:bg-rose-100"
-                          title="Cancel"
-                        >
-                          <XCircle className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            console.log('Deleting order:', order.id);
-                            handleDelete(order.id);
-                          }}
-                          disabled={isActionLoading === order.id}
-                          className="rounded-xl bg-rose-50 p-2 text-rose-600 transition-all hover:bg-rose-100"
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {order.status === 'DELIVERED' && (
+                          <button
+                            onClick={() => setSettleOrderTarget(order)}
+                            disabled={isActionLoading === order.id}
+                            className="rounded-xl bg-violet-50 p-2 text-violet-600 transition-all hover:bg-violet-100"
+                            title="Settle Order"
+                          >
+                            <ShieldAlert className="h-4 w-4" />
+                          </button>
+                        )}
+                        {order.status === 'SETTLED' ? (
+                          <div className="rounded-xl bg-slate-50 p-2 text-slate-400" title="Locked">
+                             <Lock className="h-4 w-4" />
+                          </div>
+                        ) : (
+                          <>
+                            <Link
+                              href={`/orders/${order.id}/edit`}
+                              className="rounded-xl bg-slate-100 p-2 text-slate-600 transition-all hover:bg-slate-200 hover:text-blue-600"
+                              title="Edit"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Link>
+                            <button
+                              onClick={() => {
+                                console.log('Deleting order:', order.id);
+                                handleDelete(order.id);
+                              }}
+                              disabled={isActionLoading === order.id}
+                              className="rounded-xl bg-rose-50 p-2 text-rose-600 transition-all hover:bg-rose-100"
+                              title="Delete"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -676,6 +685,204 @@ export function AllOrdersPage() {
           </div>
         </div>
       )}
+      {settleOrderTarget && (
+        <SettlementModal 
+          order={settleOrderTarget} 
+          onClose={() => setSettleOrderTarget(null)} 
+          onSettled={() => {
+            setSettleOrderTarget(null);
+            fetchOrders();
+            fetchStats();
+          }} 
+        />
+      )}
+    </div>
+  );
+}
+
+function SettlementModal({ order, onClose, onSettled }: { order: any, onClose: () => void, onSettled: () => void }) {
+  const { error: showErrorToast, success: showSuccessToast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+  const [returnState, setReturnState] = useState<Record<number, { returned: string, damaged: string }>>(
+    Object.fromEntries(order.items.map((i: any) => [i.productId, { returned: '0', damaged: '0' }]))
+  );
+  const [collectedAmount, setCollectedAmount] = useState(order.grandTotal.toString());
+  const [note, setNote] = useState('');
+
+  const calculateFinals = () => {
+    let totalSold = 0;
+    const items = order.items.map((item: any) => {
+      const state = returnState[item.productId] || { returned: '0', damaged: '0' };
+      const returned = Number(state.returned || 0);
+      const damaged = Number(state.damaged || 0);
+      const dispatched = Number(item.quantity) + Number(item.freeQuantity || 0);
+      const delivered = Math.max(0, dispatched - returned - damaged);
+      
+      const unitPriceAfterDiscount = Number(item.quantity) > 0 
+        ? Number(item.lineTotal) / Number(item.quantity) 
+        : 0;
+      
+      const chargeableDelivered = Math.max(0, Math.min(Number(item.quantity), delivered));
+      const itemSoldAmount = chargeableDelivered * unitPriceAfterDiscount;
+      totalSold += itemSoldAmount;
+
+      return {
+        productId: item.productId,
+        productName: item.product.name,
+        dispatched,
+        delivered,
+        returned,
+        damaged,
+        soldAmount: itemSoldAmount
+      };
+    });
+
+    return { items, totalSold };
+  };
+
+  const { items: displayItems, totalSold } = calculateFinals();
+
+  const handleSettle = async () => {
+    try {
+      setIsSaving(true);
+      const payload = {
+        items: Object.entries(returnState).map(([productId, state]) => ({
+          productId: Number(productId),
+          returnedQuantity: Number(state.returned || 0),
+          damagedQuantity: Number(state.damaged || 0),
+        })),
+        collectedAmount: Number(collectedAmount || 0),
+        settlementNote: note,
+      };
+
+      await settleOrder(order.id, payload);
+      showSuccessToast('Order settled successfully');
+      onSettled();
+    } catch (e: any) {
+      showErrorToast(e.message || 'Failed to settle order');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[10001] flex items-center justify-center p-4 sm:p-6">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-4xl rounded-[2.5rem] bg-white shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="bg-violet-900 px-8 py-6 text-white flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-black">Settle Order #{order.id.toString().padStart(6, '0')}</h2>
+            <p className="text-sm opacity-60">Finalize returns, damages and payment collection</p>
+          </div>
+          <button onClick={onClose} className="rounded-2xl bg-white/10 p-2 hover:bg-white/20 transition-colors">
+            <XCircle className="h-6 w-6" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-8">
+          <div className="space-y-6">
+            <div className="overflow-hidden rounded-3xl border border-slate-100">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50">
+                  <tr className="font-black uppercase tracking-widest text-slate-400 border-b border-slate-100">
+                    <th className="px-6 py-4">Product</th>
+                    <th className="px-6 py-4 text-center">Dispatch</th>
+                    <th className="px-6 py-4 text-center">Return</th>
+                    <th className="px-6 py-4 text-center">Damage</th>
+                    <th className="px-6 py-4 text-center">Sold</th>
+                    <th className="px-6 py-4 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {displayItems.map((item) => (
+                    <tr key={item.productId} className="font-medium">
+                      <td className="px-6 py-4 font-black text-slate-900">{item.productName}</td>
+                      <td className="px-6 py-4 text-center">{item.dispatched}</td>
+                      <td className="px-6 py-4 text-center">
+                        <input
+                          type="number"
+                          value={returnState[item.productId]?.returned}
+                          onChange={e => setReturnState(prev => ({ ...prev, [item.productId]: { ...prev[item.productId], returned: e.target.value } }))}
+                          className="w-16 rounded-lg bg-slate-100 border-0 p-1.5 text-center font-black text-rose-600 focus:ring-2 focus:ring-rose-500/20"
+                        />
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <input
+                          type="number"
+                          value={returnState[item.productId]?.damaged}
+                          onChange={e => setReturnState(prev => ({ ...prev, [item.productId]: { ...prev[item.productId], damaged: e.target.value } }))}
+                          className="w-16 rounded-lg bg-slate-100 border-0 p-1.5 text-center font-black text-amber-600 focus:ring-2 focus:ring-amber-500/20"
+                        />
+                      </td>
+                      <td className="px-6 py-4 text-center font-black text-emerald-600">{item.delivered}</td>
+                      <td className="px-6 py-4 text-right font-black">{formatCurrency(item.soldAmount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Collected Amount</label>
+                  <div className="relative mt-1">
+                    <CreditCard className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="number"
+                      value={collectedAmount}
+                      onChange={e => setCollectedAmount(e.target.value)}
+                      className="w-full rounded-2xl bg-slate-100 border-0 py-3 pl-11 pr-4 text-sm font-black focus:ring-2 focus:ring-violet-500/20"
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Settlement Note</label>
+                  <textarea
+                    value={note}
+                    onChange={e => setNote(e.target.value)}
+                    className="mt-1 w-full rounded-2xl bg-slate-100 border-0 p-4 text-sm outline-none focus:ring-2 focus:ring-violet-500/20 h-24"
+                    placeholder="Add any remarks for this settlement..."
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-[2rem] bg-slate-900 p-8 text-white space-y-4 h-fit">
+                <div className="flex justify-between items-center text-sm font-bold opacity-60">
+                  <span>Calculated Sold Value</span>
+                  <span>{formatCurrency(totalSold)}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm font-bold text-rose-400">
+                  <span>Collected</span>
+                  <span>-{formatCurrency(Number(collectedAmount || 0))}</span>
+                </div>
+                <div className="h-px bg-white/10" />
+                <div className="flex justify-between items-end">
+                  <span className="text-xs font-black uppercase tracking-widest opacity-40">Final Due</span>
+                  <span className="text-3xl font-black text-amber-400">
+                    {formatCurrency(Math.max(0, totalSold - Number(collectedAmount || 0)))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-slate-50 px-8 py-6 flex justify-end gap-3 border-t border-slate-100">
+          <button onClick={onClose} className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-700">
+            Cancel
+          </button>
+          <button
+            onClick={handleSettle}
+            disabled={isSaving}
+            className="rounded-2xl bg-violet-600 px-8 py-3 text-sm font-black text-white shadow-lg shadow-violet-200 hover:bg-violet-700 active:scale-95 transition-all flex items-center gap-2"
+          >
+            {isSaving ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Confirm Settlement
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

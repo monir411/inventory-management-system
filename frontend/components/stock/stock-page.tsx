@@ -28,7 +28,15 @@ export function StockPage() {
   const [selectedCompanyId, setSelectedCompanyId] = useState<number | ''>('');
   const [selectedType, setSelectedType] = useState<string>('');
   const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [tab, setTab] = useState<'current' | 'history'>('current');
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Action Modal State
   const [showActionModal, setShowActionModal] = useState(false);
@@ -63,11 +71,11 @@ export function StockPage() {
     try {
       setIsRefreshing(true);
       const [sumData, histData] = await Promise.all([
-        getStockSummary(selectedCompanyId || undefined),
+        getStockSummary(selectedCompanyId || undefined, debouncedSearch || undefined),
         getStockHistory({
           companyId: selectedCompanyId || undefined,
           type: selectedType || undefined,
-          search: search || undefined,
+          search: debouncedSearch || undefined,
         }),
       ]);
       setSummary(sumData.summary);
@@ -81,7 +89,7 @@ export function StockPage() {
   };
 
   useEffect(() => { loadInitial(); }, []);
-  useEffect(() => { refreshData(); }, [selectedCompanyId, selectedType, search]);
+  useEffect(() => { refreshData(); }, [selectedCompanyId, selectedType, debouncedSearch]);
 
   const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -20,41 +20,139 @@ export function PrintSummary({ report, mode }: PrintSummaryProps) {
   };
 
   return (
-    <div className="mx-auto bg-white p-8 text-sm text-black printable-report">
+    <div className="mx-auto bg-white p-4 text-[13px] text-black printable-report max-w-[210mm]">
+      <style dangerouslySetInnerHTML={{ __html: `
+        @media print {
+          @page { size: A4; margin: 12mm; }
+          body { -webkit-print-color-adjust: exact; }
+          .printable-report { p-0 !important; }
+        }
+        .printable-report table { border-collapse: collapse; width: 100%; }
+        .printable-report th, .printable-report td { border: 1px solid #000; padding: 6px 8px; }
+      `}} />
+
       {/* Header Section */}
-      <div className="border-b-2 border-slate-900 pb-6 text-center">
-        <h1 className="text-3xl font-black uppercase tracking-[0.25em]">
+      <div className="text-center mb-6">
+        <div className="text-2xl font-bold uppercase mb-1">MS KORIM TRADERS</div>
+        <h1 className="text-sm uppercase tracking-[0.2em] font-medium border-b border-black pb-4 inline-block px-10">
           {getTitle()}
         </h1>
-        <div className="mt-4 grid grid-cols-3 gap-4 text-left">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Batch Number</p>
-            <p className="font-bold text-lg">{report.batchNo}</p>
+        
+        {/* Info Row 1 */}
+        <div className="mt-6 flex justify-between text-left font-medium">
+          <div className="flex-1">
+            <span className="font-bold">Batch Number:</span> {report.batchNo}
           </div>
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Delivery Date</p>
-            <p className="font-bold text-lg">{new Date(report.dispatchDate).toLocaleDateString()}</p>
+          <div className="flex-1 text-center">
+            <span className="font-bold">Delivery Date:</span> {new Date(report.dispatchDate).toLocaleDateString()}
           </div>
-          <div className="text-right">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Route</p>
-            <p className="font-bold text-lg">{report.route.name}</p>
+          <div className="flex-1 text-right">
+            <span className="font-bold">Route:</span> {report.route.name}
           </div>
         </div>
-        <div className="mt-4 border-t border-slate-100 pt-4 flex justify-between items-center">
-          <div>
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Delivery Personnel</p>
-            <p className="font-bold">{report.deliveryPerson.name}</p>
+
+        {/* Info Row 2 */}
+        <div className="mt-2 flex justify-between text-left font-medium border-b border-black/10 pb-4">
+          <div className="flex-1">
+            <span className="font-bold">Delivery Personnel:</span> {report.deliveryPerson.name}
           </div>
-          <div className="text-right">
-             <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Print Date</p>
-             <p className="font-medium text-slate-500">{new Date().toLocaleString()}</p>
+          <div className="flex-1 text-right text-xs text-slate-500">
+            <span className="font-bold">Print Date & Time:</span> {new Date().toLocaleString()}
           </div>
         </div>
       </div>
 
       {mode === 'morning' && <MorningLayout report={report} />}
       {mode === 'field' && <FieldLayout report={report} />}
-      {mode === 'final' && <FinalLayout report={report} />}
+      {mode === 'final' && <FinalSettlementLayout report={report} />}
+    </div>
+  );
+}
+
+function FinalSettlementLayout({ report }: { report: any }) {
+  const products = report.productSummary || [];
+  const sortedProducts = [...products].sort((a, b) => a.productName.localeCompare(b.productName));
+
+  return (
+    <div className="mt-2">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="bg-slate-50 uppercase font-bold text-[10px]">
+            <th className="w-8 text-center">SL</th>
+            <th className="text-left">Product Name</th>
+            <th className="w-14 text-center">Qty</th>
+            <th className="w-14 text-center">Return</th>
+            <th className="w-14 text-center">Damage</th>
+            <th className="w-14 text-center">Sold</th>
+            <th className="w-20 text-center">Price</th>
+            <th className="w-24 text-right">Total</th>
+            <th className="text-left min-w-[80px]">Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          {sortedProducts.map((item, index) => {
+            const soldQty = Number(item.delivered || 0);
+            const unitPrice = soldQty > 0 ? Number(item.finalSoldAmount) / soldQty : 0;
+            return (
+              <tr key={item.productName}>
+                <td className="text-center text-slate-400">{index + 1}</td>
+                <td className="font-medium">{item.productName}</td>
+                <td className="text-center">{formatNumber(item.dispatched)}</td>
+                <td className="text-center">{formatNumber(item.returned)}</td>
+                <td className="text-center">{formatNumber(item.damaged)}</td>
+                <td className="text-center font-bold text-emerald-600 italic">
+                  {formatNumber(soldQty)}
+                </td>
+                <td className="text-center text-slate-600">
+                  {formatCurrency(unitPrice)}
+                </td>
+                <td className="text-right font-bold bg-slate-50/50">
+                  {formatCurrency(item.finalSoldAmount)}
+                </td>
+                <td></td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* Summary Aligned Rows */}
+      <div className="mt-8 flex justify-end">
+        <div className="w-64 space-y-2 border-t border-black pt-4">
+          <div className="flex justify-between text-xs font-medium">
+            <span>Total Quantity:</span>
+            <span>{formatNumber(report.summary.totalDispatchedQty || products.reduce((s,i) => s+Number(i.dispatched),0))}</span>
+          </div>
+          <div className="flex justify-between text-xs font-medium">
+            <span>Returned:</span>
+            <span>{formatNumber(products.reduce((s,i) => s+Number(i.returned),0))}</span>
+          </div>
+          <div className="flex justify-between text-xs font-medium">
+            <span>Damaged:</span>
+            <span>{formatNumber(products.reduce((s,i) => s+Number(i.damaged),0))}</span>
+          </div>
+          <div className="flex justify-between text-xs font-bold border-b border-black pb-2">
+            <span>Sold:</span>
+            <span>{formatNumber(products.reduce((s,i) => s+Number(i.delivered),0))}</span>
+          </div>
+          <div className="flex justify-between text-base font-bold pt-1">
+            <span>GRAND TOTAL:</span>
+            <span>{formatCurrency(report.summary.finalSoldValue)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-20 grid grid-cols-3 gap-10">
+        <div className="border-t border-black pt-2 text-center text-[10px] font-bold uppercase tracking-widest">
+          Delivery Man Signature
+        </div>
+        <div className="border-t border-black pt-2 text-center text-[10px] font-bold uppercase tracking-widest">
+          Authorized Signature
+        </div>
+        <div className="border-t border-black pt-2 text-center text-[10px] font-bold uppercase tracking-widest">
+          Cash Received By
+        </div>
+      </div>
     </div>
   );
 }
@@ -71,47 +169,66 @@ function FieldLayout({ report }: { report: any }) {
       <table className="w-full border-2 border-slate-900 border-collapse">
         <thead>
           <tr className="bg-slate-50 text-[10px] font-black uppercase tracking-widest">
-            <th className="border-2 border-slate-900 px-3 py-4 text-center w-12">SL</th>
-            <th className="border-2 border-slate-900 px-4 py-4 text-left min-w-[200px]">Product Name</th>
-            <th className="border-2 border-slate-900 px-3 py-4 text-center w-24">Order</th>
-            <th className="border-2 border-slate-900 px-3 py-4 text-center w-24 text-rose-600">Return</th>
-            <th className="border-2 border-slate-900 px-3 py-4 text-center w-24 text-emerald-600">Sales</th>
-            <th className="border-2 border-slate-900 px-3 py-4 text-center w-24">Price</th>
-            <th className="border-2 border-slate-900 px-4 py-4 text-left">Remarks</th>
+            <th className="border-2 border-slate-900 px-2 py-3 text-center w-10">SL</th>
+            <th className="border-2 border-slate-900 px-3 py-3 text-left min-w-[180px]">Product Name</th>
+            <th className="border-2 border-slate-900 px-2 py-3 text-center w-20">Qty</th>
+            <th className="border-2 border-slate-900 px-2 py-3 text-center w-20 text-rose-600">Return</th>
+            <th className="border-2 border-slate-900 px-2 py-3 text-center w-20 text-emerald-600">Sales</th>
+            <th className="border-2 border-slate-900 px-2 py-3 text-center w-24">Price</th>
+            <th className="border-2 border-slate-900 px-2 py-3 text-center w-28">Total</th>
+            <th className="border-2 border-slate-900 px-3 py-3 text-left">Remarks</th>
           </tr>
         </thead>
         <tbody>
-          {sortedItems.map((item, index) => (
-            <tr key={item.productName} className="font-bold">
-              <td className="border-2 border-slate-900 px-3 py-5 text-center text-slate-400 font-medium">
-                {index + 1}
-              </td>
-              <td className="border-2 border-slate-900 px-4 py-5 text-left text-slate-900 text-base">
-                {item.productName}
-              </td>
-              <td className="border-2 border-slate-900 px-3 py-5 text-center text-lg bg-slate-50">
-                {formatNumber(item.quantity)}
-              </td>
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-4 py-5"></td>
-            </tr>
-          ))}
-          {/* Add a few extra empty rows just in case */}
-          {Array.from({ length: 5 }).map((_, i) => (
-            <tr key={`empty-${i}`} className="h-14">
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-4 py-5"></td>
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-3 py-5"></td>
-              <td className="border-2 border-slate-900 px-4 py-5"></td>
+          {sortedItems.map((item, index) => {
+            const unitPrice = item.quantity > 0 ? item.estimatedAmount / item.quantity : 0;
+            return (
+              <tr key={item.productName} className="font-bold">
+                <td className="border-2 border-slate-900 px-2 py-3 text-center text-slate-400 font-medium">
+                  {index + 1}
+                </td>
+                <td className="border-2 border-slate-900 px-3 py-3 text-left text-slate-900 text-sm">
+                  {item.productName}
+                </td>
+                <td className="border-2 border-slate-900 px-2 py-3 text-center text-base bg-slate-50">
+                  {formatNumber(item.quantity)}
+                </td>
+                <td className="border-2 border-slate-900 px-2 py-3"></td>
+                <td className="border-2 border-slate-900 px-2 py-3"></td>
+                <td className="border-2 border-slate-900 px-2 py-3 text-center text-xs text-slate-500">
+                  {formatCurrency(unitPrice)}
+                </td>
+                <td className="border-2 border-slate-900 px-2 py-3 text-center text-sm">
+                  {formatCurrency(item.estimatedAmount)}
+                </td>
+                <td className="border-2 border-slate-900 px-3 py-3"></td>
+              </tr>
+            );
+          })}
+          {/* Empty rows for manual entry if needed */}
+          {sortedItems.length < 15 && Array.from({ length: Math.max(0, 15 - sortedItems.length) }).map((_, i) => (
+            <tr key={`empty-${i}`} className="h-10">
+              <td className="border-2 border-slate-900 px-2 py-3"></td>
+              <td className="border-2 border-slate-900 px-3 py-3"></td>
+              <td className="border-2 border-slate-900 px-2 py-3"></td>
+              <td className="border-2 border-slate-900 px-2 py-3"></td>
+              <td className="border-2 border-slate-900 px-2 py-3"></td>
+              <td className="border-2 border-slate-900 px-2 py-3"></td>
+              <td className="border-2 border-slate-900 px-2 py-3"></td>
+              <td className="border-2 border-slate-900 px-3 py-3"></td>
             </tr>
           ))}
         </tbody>
       </table>
+
+      {/* Bottom Summary */}
+      <div className="mt-6 flex justify-end">
+        <div className="border-2 border-slate-900 px-6 py-3 bg-slate-50">
+          <p className="text-lg font-black">
+            TOTAL AMOUNT: {formatCurrency(report.estimatedTotalAmount)}
+          </p>
+        </div>
+      </div>
 
       <div className="mt-12 grid grid-cols-2 gap-20">
         <div className="border-t-2 border-slate-900 pt-3 text-center">
@@ -196,85 +313,4 @@ function MorningLayout({ report }: { report: any }) {
   );
 }
 
-function FinalLayout({ report }: { report: any }) {
-  return (
-    <div className="mt-8 space-y-10">
-       {/* Metrics Grid */}
-       <div className="grid grid-cols-4 gap-4">
-        {[
-          ['Gross Dispatch', report.summary.grossDispatchedValue, 'text-slate-500'],
-          ['Return Adjusted', report.summary.returnAdjustedValue, 'text-rose-600'],
-          ['Final Sold', report.summary.finalSoldValue, 'text-emerald-700'],
-          ['Collected Cash', report.summary.totalCollectedAmount, 'text-cyan-700'],
-        ].map(([label, value, colorClass]) => (
-          <div key={label} className="rounded-xl border border-slate-200 p-4 bg-slate-50">
-            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-1">{label}</p>
-            <p className={`text-lg font-black ${colorClass}`}>{formatCurrency(Number(value))}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Product Reconciliation */}
-      <div>
-        <h2 className="text-sm font-black uppercase tracking-widest border-l-4 border-slate-900 pl-3 mb-4">
-          Product Reconciliation
-        </h2>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b-2 border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">
-              <th className="py-3 text-left">Product</th>
-              <th className="py-3 text-center">Dispatch</th>
-              <th className="py-3 text-center text-rose-500">Return</th>
-              <th className="py-3 text-center text-rose-500">Damage</th>
-              <th className="py-3 text-center text-emerald-600">Sold</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {report.productSummary.map((item: any) => (
-              <tr key={item.productName} className="font-medium text-[12px]">
-                <td className="py-2.5 font-bold text-slate-900">{item.productName}</td>
-                <td className="py-2.5 text-center">{formatNumber(item.dispatched)}</td>
-                <td className="py-2.5 text-center text-rose-500">{formatNumber(item.returned)}</td>
-                <td className="py-2.5 text-center text-rose-500">{formatNumber(item.damaged)}</td>
-                <td className="py-2.5 text-center font-black text-emerald-600">{formatNumber(item.delivered)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Order Settlement */}
-      <div>
-        <h2 className="text-sm font-black uppercase tracking-widest border-l-4 border-slate-900 pl-3 mb-4">
-          Order Settlement Details
-        </h2>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b-2 border-slate-200 text-[10px] font-black uppercase tracking-widest text-slate-500">
-              <th className="py-3 text-left">Order</th>
-              <th className="py-3 text-right">Sold Amount</th>
-              <th className="py-3 text-right">Advance</th>
-              <th className="py-3 text-right">Collected</th>
-              <th className="py-3 text-right">Balance Due</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {report.orders.map((order: any) => (
-              <tr key={order.orderId} className="text-[12px]">
-                <td className="py-3">
-                  <p className="font-black text-slate-900">#{String(order.orderId).padStart(6, '0')}</p>
-                  <p className="text-[10px] font-bold text-slate-400">{order.shopName}</p>
-                </td>
-                <td className="py-3 text-right font-bold">{formatCurrency(order.calculations.finalSoldAmount)}</td>
-                <td className="py-3 text-right text-slate-500">{formatCurrency(order.advancePaid || 0)}</td>
-                <td className="py-3 text-right font-black text-emerald-600">{formatCurrency(order.collectedAmount || 0)}</td>
-                <td className="py-3 text-right font-black text-rose-600">{formatCurrency(order.dueAmount || 0)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
 

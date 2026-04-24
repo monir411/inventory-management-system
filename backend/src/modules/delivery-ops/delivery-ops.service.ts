@@ -413,6 +413,10 @@ export class DeliveryOpsService {
   async recordReturns(id: number, dto: RecordBatchReturnsDto) {
     const batch = await this.getDispatchBatch(id);
 
+    if (batch.status === DispatchBatchStatus.SETTLED) {
+      throw new BadRequestException('Batch already settled. No changes allowed.');
+    }
+
     if (
       ![
         DispatchBatchStatus.DISPATCHED,
@@ -654,6 +658,10 @@ export class DeliveryOpsService {
 
   async settleBatch(id: number, dto: SettleDispatchBatchDto) {
     const batch = await this.getDispatchBatch(id);
+    if (batch.status === DispatchBatchStatus.SETTLED) {
+      throw new BadRequestException('Batch already settled. No changes allowed.');
+    }
+
     if (
       ![
         DispatchBatchStatus.RETURN_PENDING,

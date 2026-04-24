@@ -60,3 +60,10 @@ export function deleteOrder(id: number) {
     method: 'DELETE',
   });
 }
+
+export function settleOrder(id: number, payload: { items: any[], collectedAmount?: number, settlementNote?: string }) {
+  return apiRequest<Order>(`orders/${id}/settle`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}

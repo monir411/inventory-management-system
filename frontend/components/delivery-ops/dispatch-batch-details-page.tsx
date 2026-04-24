@@ -36,22 +36,10 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isSavingReturns, setIsSavingReturns] = useState(false);
   const [isSettling, setIsSettling] = useState(false);
-  const [printData, setPrintData] = useState<{ report: any; mode: 'morning' | 'final' | 'field' } | null>(null);
-  const [isReadyToPrint, setIsReadyToPrint] = useState(false);
   const [activeTab, setActiveTab] = useState<'sheet' | 'entry' | 'settle'>('sheet');
   const [batchReturnState, setBatchReturnState] = useState<Record<number, { returned: string; damaged: string }>>({});
 
-  // Unified print effect
-  useEffect(() => {
-    if (isReadyToPrint && printData) {
-      const timer = setTimeout(() => {
-        window.print();
-        setIsReadyToPrint(false);
-        setTimeout(() => setPrintData(null), 500);
-      }, 500);
-      return () => clearTimeout(timer);
-    }
-  }, [isReadyToPrint, printData]);
+  // No print logic here anymore, handled by dedicated routes
 
   // Aggregate items across all orders in the batch
   const aggregatedItems = useMemo(() => {
@@ -144,15 +132,19 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
   const handlePrintMorning = async () => {
     try {
       await markMorningPrinted(batchId);
-      const report = await getMorningDispatchReport(batchId);
-      setPrintData({ report, mode: 'morning' });
-      showSuccessToast('Morning summary prepared for printing');
+      window.open(`/delivery-ops/batches/${batchId}/print-morning-summary`, "_blank");
       fetchBatch();
-      // Set ready to print which triggers the useEffect
-      setIsReadyToPrint(true);
     } catch (error: any) {
       showErrorToast(error.message || 'Failed to print morning summary');
     }
+  };
+  
+  const handlePrintFieldSheet = async () => {
+    window.open(`/delivery-ops/batches/${batchId}/print-field-sheet`, "_blank");
+  };
+
+  const handlePrintFinalSettlement = async () => {
+    window.open(`/delivery-ops/batches/${batchId}/print-final-settlement`, "_blank");
   };
 
   const handleDispatch = async () => {
@@ -168,29 +160,42 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
   const handleSaveReturns = async () => {
     if (!batch) return;
 
+    // Validate returns against dispatched quantities
+    for (const item of aggregatedItems) {
+      const state = batchReturnState[item.productId] || { returned: '0', damaged: '0' };
+      const returned = Number(state.returned || 0);
+      const damaged = Number(state.damaged || 0);
+
+      if (returned < 0 || damaged < 0) {
+        showErrorToast(`Negative values are not allowed for ${item.name}`);
+        return;
+      }
+
+      if (returned + damaged > item.totalQty) {
+        showErrorToast(`Total returns (${returned + damaged}) for ${item.name} cannot exceed total dispatched quantity (${item.totalQty})`);
+        return;
+      }
+    }
+
     try {
       setIsSavingReturns(true);
       
-      // Distribute returns across orders (simplified: find orders that have the product)
       const ordersToUpdate = batch.orders.map(bo => {
         return {
           orderId: bo.orderId,
           items: bo.order.items.map(item => {
             const state = batchReturnState[item.productId] || { returned: '0', damaged: '0' };
-            // For simplicity in this "simple workflow", we just pass the full aggregated return to the first order that contains the product
-            // and 0 to others? No, that would be wrong for inventory.
-            // Better: just send the aggregated data and let the backend handle or proportionally distribute.
-            // BUT backend expects per item. Let's do proportional distribution.
             const totalDispatchedForThisProduct = aggregatedItems.find(ai => ai.productId === item.productId)?.totalQty || 1;
             const dispatchedInThisOrder = Number(item.quantity) + Number(item.freeQuantity || 0);
             const ratio = dispatchedInThisOrder / totalDispatchedForThisProduct;
             
+            // Proportional distribution of returns
             return {
               productId: item.productId,
               dispatchedQuantity: dispatchedInThisOrder,
               returnedQuantity: Math.round(Number(state.returned) * ratio),
               damagedQuantity: Math.round(Number(state.damaged) * ratio),
-              deliveredQuantity: dispatchedInThisOrder - Math.round(Number(state.returned) * ratio) - Math.round(Number(state.damaged) * ratio),
+              // deliveredQuantity is calculated by backend or frontend-only, do not send
             };
           })
         };
@@ -216,7 +221,7 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
       await settleDispatchBatch(batchId, {
         collections: batch.orders.map((batchOrder) => ({
           orderId: batchOrder.orderId,
-          collectedAmount: Number(batchOrder.metrics?.finalSoldAmount || batchOrder.finalSoldAmount || 0),
+          collectedAmount: Number(batchOrder.finalSoldAmount || 0),
           paymentMode: 'CASH',
         })),
       });
@@ -245,42 +250,11 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
   ] as const;
 
   return (
-    <div className="space-y-6 pb-20 print:hidden">
+    <div className="space-y-6 pb-20">
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
-          /* Hide EVERYTHING in the body */
-          body { 
-            visibility: hidden !important; 
-            background: white !important;
-          }
-          
-          /* Show ONLY the print area and its contents */
-          #print-area, #print-area * { 
-            visibility: visible !important; 
-          }
-          
-          /* Force #print-area to the top-left */
-          #print-area { 
-            position: absolute !important; 
-            left: 0 !important; 
-            top: 0 !important; 
-            width: 100% !important; 
-            height: auto !important;
-            margin: 0 !important;
-            padding: 0 !important;
-            background: white !important;
-            z-index: 99999 !important;
-          }
-
-          /* Explicitly hide any common UI elements that might have their own visibility:visible */
-          [role="status"], .toast-container, #headlessui-portal-root {
+          .no-print {
             display: none !important;
-            visibility: hidden !important;
-          }
-
-          @page {
-            margin: 1cm;
-            size: auto;
           }
         }
       `}} />
@@ -302,16 +276,22 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
             <p className="mt-2 text-sm font-medium text-slate-500">
               {formatDate(batch.dispatchDate)} · Delivery Man: {batch.deliveryPerson.name} · Route: {batch.route.name}
             </p>
+            {batch.status === 'SETTLED' && (
+              <div className="mt-2 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-emerald-600">
+                <ShieldAlert className="h-3 w-3" />
+                Locked after settlement
+              </div>
+            )}
           </div>
         </div>
 
         {batch.status === 'DRAFT' && (
           <div className="flex flex-wrap gap-3">
             <button
-              onClick={() => setActiveTab('print')}
+              onClick={() => handlePrintMorning()}
               className="rounded-2xl border border-slate-200 bg-white px-5 py-3 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
-              Prepare Morning Print
+              Print Morning Sheet
             </button>
             <button
               onClick={handleDispatch}
@@ -320,6 +300,20 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
               <span className="inline-flex items-center gap-2">
                 <Send className="h-4 w-4" />
                 Dispatch to Field
+              </span>
+            </button>
+          </div>
+        )}
+
+        {['DISPATCHED', 'RETURN_PENDING', 'PARTIALLY_SETTLED', 'SETTLED'].includes(batch.status) && (
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={handlePrintFinalSettlement}
+              className="rounded-2xl border-2 border-slate-900 bg-white px-5 py-3 text-sm font-black text-slate-900 shadow-sm transition hover:bg-slate-50"
+            >
+              <span className="inline-flex items-center gap-2">
+                <Printer className="h-4 w-4" />
+                Print Final Settlement
               </span>
             </button>
           </div>
@@ -348,7 +342,7 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
           description="Consolidated view for manual record keeping in the field."
           action={
             <button
-              onClick={handlePrintMorning}
+              onClick={handlePrintFieldSheet}
               className="rounded-2xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
             >
               <span className="inline-flex items-center gap-2">
@@ -360,36 +354,40 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
           noPadding
         >
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                  <th className="px-6 py-4 text-center w-16">SL</th>
-                  <th className="px-6 py-4 text-left">Product Name</th>
-                  <th className="px-6 py-4 text-center w-24">Order</th>
-                  <th className="px-6 py-4 text-center w-24">Return</th>
-                  <th className="px-6 py-4 text-center w-24">Sales</th>
-                  <th className="px-6 py-4 text-center w-24">Price</th>
-                  <th className="px-6 py-4 text-left">Remarks</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {aggregatedItems.map((item, index) => (
-                  <tr key={item.productId} className="hover:bg-slate-50/30 transition-colors">
-                    <td className="px-6 py-4 text-center font-bold text-slate-400">{index + 1}</td>
-                    <td className="px-6 py-4 font-bold text-slate-900">{item.name}</td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-black text-slate-700">
-                        {formatNumber(item.totalQty)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4"></td>
-                    <td className="px-6 py-4 text-center font-medium text-slate-400">{formatCurrency(item.price)}</td>
-                    <td className="px-6 py-4"></td>
+            {aggregatedItems.length === 0 ? (
+              <div className="p-12 text-center text-slate-400 font-bold">No products in this batch</div>
+            ) : (
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <th className="px-6 py-4 text-center w-16">SL</th>
+                    <th className="px-6 py-4 text-left">Product Name</th>
+                    <th className="px-6 py-4 text-center w-24">Qty</th>
+                    <th className="px-6 py-4 text-center w-24">Return</th>
+                    <th className="px-6 py-4 text-center w-24">Sales</th>
+                    <th className="px-6 py-4 text-center w-24">Price</th>
+                    <th className="px-6 py-4 text-left">Remarks</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {aggregatedItems.map((item, index) => (
+                    <tr key={item.productId} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-6 py-4 text-center font-bold text-slate-400">{index + 1}</td>
+                      <td className="px-6 py-4 font-bold text-slate-900">{item.name}</td>
+                      <td className="px-6 py-4 text-center">
+                        <span className="rounded-lg bg-slate-100 px-3 py-1.5 font-black text-slate-700">
+                          {formatNumber(item.totalQty)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4"></td>
+                      <td className="px-6 py-4"></td>
+                      <td className="px-6 py-4 text-center font-medium text-slate-400">{formatCurrency(item.price)}</td>
+                      <td className="px-6 py-4"></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </PageCard>
       )}
@@ -399,16 +397,29 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
           title="Data Entry" 
           description="Enter actual field returns and damaged units here."
           action={
-            <button
-              onClick={handleSaveReturns}
-              disabled={isSavingReturns || !['DISPATCHED', 'RETURN_PENDING', 'PARTIALLY_SETTLED'].includes(batch.status)}
-              className="rounded-2xl bg-cyan-700 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-200 disabled:opacity-50"
-            >
-              <span className="inline-flex items-center gap-2">
-                {isSavingReturns ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save & Proceed
-              </span>
-            </button>
+            <div className="flex gap-2">
+              {['RETURN_PENDING', 'PARTIALLY_SETTLED', 'SETTLED'].includes(batch.status) && (
+                <button
+                  onClick={handlePrintFinalSettlement}
+                  className="rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Printer className="h-3.5 w-3.5" />
+                    Print Settlement
+                  </span>
+                </button>
+              )}
+              <button
+                onClick={handleSaveReturns}
+                disabled={isSavingReturns || batch.status === 'SETTLED' || !['DISPATCHED', 'RETURN_PENDING', 'PARTIALLY_SETTLED'].includes(batch.status)}
+                className="rounded-2xl bg-cyan-700 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-cyan-200 disabled:opacity-50 disabled:bg-slate-400 disabled:shadow-none"
+              >
+                <span className="inline-flex items-center gap-2">
+                  {isSavingReturns ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {batch.status === 'SETTLED' ? 'Entry Locked' : 'Save & Proceed'}
+                </span>
+              </button>
+            </div>
           }
           noPadding
         >
@@ -418,7 +429,7 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
                 <tr className="border-b border-slate-100 bg-slate-50/50 text-[10px] font-black uppercase tracking-widest text-slate-400">
                   <th className="px-6 py-4 text-center w-16">SL</th>
                   <th className="px-6 py-4 text-left">Product Name</th>
-                  <th className="px-6 py-4 text-center w-24">Order</th>
+                  <th className="px-6 py-4 text-center w-24">Qty</th>
                   <th className="px-6 py-4 text-center w-32">Returned</th>
                   <th className="px-6 py-4 text-center w-32">Damaged</th>
                   <th className="px-6 py-4 text-center w-24">Delivered</th>
@@ -442,11 +453,12 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
                           min="0"
                           max={item.totalQty}
                           value={state.returned}
+                          disabled={batch.status === 'SETTLED'}
                           onChange={(e) => setBatchReturnState(prev => ({
                             ...prev,
                             [item.productId]: { ...state, returned: e.target.value }
                           }))}
-                          className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-black text-rose-600 focus:bg-white focus:ring-2 focus:ring-rose-500/10 outline-none"
+                          className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-black text-rose-600 focus:bg-white focus:ring-2 focus:ring-rose-500/10 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -455,11 +467,12 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
                           min="0"
                           max={item.totalQty}
                           value={state.damaged}
+                          disabled={batch.status === 'SETTLED'}
                           onChange={(e) => setBatchReturnState(prev => ({
                             ...prev,
                             [item.productId]: { ...state, damaged: e.target.value }
                           }))}
-                          className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-black text-amber-600 focus:bg-white focus:ring-2 focus:ring-amber-500/10 outline-none"
+                          className="w-24 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-center font-black text-amber-600 focus:bg-white focus:ring-2 focus:ring-amber-500/10 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="px-6 py-4 text-center">
@@ -482,7 +495,7 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
         
         <div className="grid grid-cols-2 md:grid-cols-4 border-2 border-slate-900 divide-x-2 divide-y-2 md:divide-y-0 divide-slate-900">
           <div className="p-6 bg-white">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Order</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1">Total Qty</p>
             <p className="text-2xl font-black text-slate-900">{formatNumber(finalMetrics?.totalOrder || 0)}</p>
           </div>
           <div className="p-6 bg-white">
@@ -516,17 +529,25 @@ export function DispatchBatchDetailsPage({ id }: { id: string }) {
             </button>
           </div>
         )}
-      </div>
 
-      {/* Actual Print Overlay - Robust screen hiding, clear print display */}
-      <div 
-        id="print-area" 
-        className={`fixed inset-0 z-[9999] bg-white transition-all duration-300 print:static ${printData ? 'opacity-100 visible' : 'opacity-0 invisible pointer-events-none'}`}
-      >
-        {printData && (
-          <PrintSummary report={printData.report} mode={printData.mode} />
+        {batch.status === 'SETTLED' && (
+          <div className="mt-12 flex flex-col items-center justify-center space-y-6">
+            <div className="text-center">
+              <p className="text-sm font-black uppercase tracking-widest text-emerald-600">Batch Fully Settled</p>
+              <p className="text-xs font-bold text-slate-500 mt-1 uppercase">Ledger updated and inventory finalized</p>
+            </div>
+            
+            <button
+              onClick={handlePrintFinalSettlement}
+              className="flex items-center gap-3 rounded-none border-4 border-slate-900 bg-white px-12 py-4 text-lg font-black uppercase tracking-widest text-slate-900 transition hover:bg-slate-900 hover:text-white"
+            >
+              <Printer className="h-5 w-5" />
+              Print Final Settlement Report
+            </button>
+          </div>
         )}
       </div>
+
     </div>
   );
 }
