@@ -6,12 +6,13 @@ import { getCompanies } from '@/lib/api/companies';
 import { getRoutes } from '@/lib/api/routes';
 import { getShops } from '@/lib/api/shops';
 import { getProducts } from '@/lib/api/products';
+import { getDeliveryPeople } from '@/lib/api/delivery-ops';
 import { createOrder, getOrder, updateOrder } from '@/lib/api/orders';
 import { PageCard } from '@/components/ui/page-card';
 import { LoadingBlock } from '@/components/ui/loading-block';
 import { useToastNotification } from '@/components/ui/toast-provider';
 import { formatCurrency } from '@/lib/utils/format';
-import type { Company, Route, Shop, Product } from '@/types/api';
+import type { Company, Route, Shop, Product, DeliveryPerson } from '@/types/api';
 
 interface OrderLine {
   productId: number;
@@ -39,6 +40,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [shops, setShops] = useState<Shop[]>([]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
+  const [deliveryPeople, setDeliveryPeople] = useState<DeliveryPerson[]>([]);
 
   // Form Header
   const [orderDate, setOrderDate] = useState(() => {
@@ -49,6 +51,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
   const [companyId, setCompanyId] = useState<number | ''>('');
   const [routeId, setRouteId] = useState<number | ''>('');
   const [shopId, setShopId] = useState<number | ''>('');
+  const [deliveryPersonId, setDeliveryPersonId] = useState<number | ''>('');
 
   // Invoice Discount
   const [invDiscountType, setInvDiscountType] = useState<'FIXED' | 'PERCENT'>('FIXED');
@@ -105,16 +108,18 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
     async function load() {
       try {
         setIsLoading(true);
-        const [c, r, s, p] = await Promise.all([
+        const [c, r, s, p, d] = await Promise.all([
           getCompanies(),
           getRoutes(),
           getShops(),
           getProducts(),
+          getDeliveryPeople(),
         ]);
         setCompanies(c);
         setRoutes(r);
         setShops(s);
         setAllProducts(p);
+        setDeliveryPeople(d);
 
         if (orderId) {
           const order = await getOrder(orderId);
@@ -126,6 +131,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
             setRouteSearch(order.route?.name || '');
             setShopId(order.shopId || '');
             setShopSearch(order.shop?.name || '');
+            setDeliveryPersonId(order.deliveryPersonId || '');
             setInvDiscountType(order.discountType || 'FIXED');
             setInvDiscountValue(order.discountValue || 0);
             setNote(order.note || '');
@@ -239,6 +245,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
         companyId: Number(companyId),
         routeId: Number(routeId),
         shopId: shopId ? Number(shopId) : undefined,
+        deliveryPersonId: deliveryPersonId ? Number(deliveryPersonId) : undefined,
         discountType: invDiscountType,
         discountValue: invDiscountValue,
         note: note.trim() || undefined,
@@ -272,7 +279,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
   return (
     <div className="space-y-6">
       <PageCard title={orderId ? "Edit Order" : "New Order"} description={orderId ? "Update existing order details." : "Create a new order for a shop."}>
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <label className="block space-y-1">
             <span className="text-xs font-semibold text-slate-500 uppercase">Order Date</span>
             <input type="date" value={orderDate} onChange={e => setOrderDate(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm" />
@@ -390,6 +397,20 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
               </div>
             )}
           </div>
+
+          <label className="block space-y-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase">Delivery Man</span>
+            <select
+              value={deliveryPersonId}
+              onChange={e => setDeliveryPersonId(e.target.value === '' ? '' : Number(e.target.value))}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"
+            >
+              <option value="">-- Optional --</option>
+              {deliveryPeople.map(person => (
+                <option key={person.id} value={person.id}>{person.name}</option>
+              ))}
+            </select>
+          </label>
         </div>
       </PageCard>
 

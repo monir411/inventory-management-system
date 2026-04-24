@@ -20,11 +20,15 @@ export function AdminShell({ children }: AdminShellProps) {
         {isAuthPage ? (
           children
         ) : (
-          <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] p-4 md:p-6">
-            <div className="grid w-full gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
-              <Sidebar />
-              <div className="space-y-6">
-                <Topbar />
+          <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#e2e8f0_100%)] p-4 md:p-6 print:min-h-0 print:bg-white print:p-0">
+            <div className="grid w-full gap-6 lg:grid-cols-[280px_minmax(0,1fr)] print:block print:gap-0">
+              <div className="print:hidden">
+                <Sidebar />
+              </div>
+              <div className="space-y-6 print:space-y-0">
+                <div className="print:hidden">
+                  <Topbar />
+                </div>
                 {children}
               </div>
             </div>

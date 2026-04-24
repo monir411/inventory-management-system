@@ -5,9 +5,12 @@ export interface CreateOrderPayload {
   orderDate: string;
   companyId: number;
   routeId: number;
+  deliveryPersonId?: number;
+  marketArea?: string;
   shopId?: number;
   discountType: 'FIXED' | 'PERCENT';
   discountValue: number;
+  advancePaid?: number;
   note?: string;
   items: {
     productId: number;
@@ -27,7 +30,7 @@ export function createOrder(payload: CreateOrderPayload) {
 }
 
 export function getOrders(query?: Record<string, any>) {
-  return apiRequest('orders', { query });
+  return apiRequest<Order[]>('orders', { query });
 }
 
 export function getOrder(id: number) {
@@ -35,11 +38,11 @@ export function getOrder(id: number) {
 }
 
 export function getOrderStats() {
-  return apiRequest('orders/stats');
+  return apiRequest<Record<string, number>>('orders/stats');
 }
 
 export function updateOrderStatus(id: number, status: string) {
-  return apiRequest(`orders/${id}/status`, {
+  return apiRequest<Order>(`orders/${id}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
   });
@@ -53,7 +56,7 @@ export function updateOrder(id: number, payload: CreateOrderPayload) {
 }
 
 export function deleteOrder(id: number) {
-  return apiRequest(`orders/${id}`, {
+  return apiRequest<{ affected?: number }>(`orders/${id}`, {
     method: 'DELETE',
   });
 }

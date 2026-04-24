@@ -14,17 +14,17 @@ export class DeliverySummary {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date', nullable: true })
   deliveryDate: Date;
 
-  @Column()
+  @Column({ nullable: true })
   companyId: number;
 
   @ManyToOne(() => Company)
   @JoinColumn({ name: 'companyId' })
   company: Company;
 
-  @Column()
+  @Column({ nullable: true })
   routeId: number;
 
   @ManyToOne(() => Route)

@@ -4,6 +4,7 @@ import { Route } from '../../routes/entities/route.entity';
 import { Shop } from '../../shops/entities/shop.entity';
 import { Product } from '../../products/entities/product.entity';
 import { DiscountType, OrderStatus, ColumnNumericTransformer } from '../orders.constants';
+import { DeliveryPerson } from '../../delivery-ops/entities/delivery-person.entity';
 
 @Entity('orders')
 export class Order {
@@ -28,6 +29,16 @@ export class Order {
   route: Route;
 
   @Column({ nullable: true })
+  deliveryPersonId?: number;
+
+  @ManyToOne(() => DeliveryPerson, { nullable: true })
+  @JoinColumn({ name: 'deliveryPersonId' })
+  deliveryPerson?: DeliveryPerson;
+
+  @Column({ type: 'varchar', length: 120, nullable: true })
+  marketArea?: string;
+
+  @Column({ nullable: true })
   shopId?: number;
 
   @ManyToOne(() => Shop, { nullable: true })
@@ -49,6 +60,30 @@ export class Order {
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
   grandTotal: number;
 
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  advancePaid: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  actualSoldAmount: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  collectedAmount: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  dueAmount: number;
+
+  @Column({ type: 'timestamp', nullable: true })
+  dispatchedAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  deliveredAt?: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
+  settledAt?: Date;
+
+  @Column({ default: false })
+  isLocked: boolean;
+
   @Column({ type: 'enum', enum: OrderStatus, default: OrderStatus.CONFIRMED })
   status: OrderStatus;
 
@@ -57,6 +92,9 @@ export class Order {
 
   @Column({ default: 'Admin' })
   createdBy: string;
+
+  @Column({ type: 'text', nullable: true })
+  settlementNote?: string;
 
   @OneToMany(() => OrderItem, (item) => item.order, { cascade: true, eager: true })
   items: OrderItem[];
@@ -107,4 +145,13 @@ export class OrderItem {
 
   @Column({ type: 'decimal', precision: 12, scale: 2, transformer: new ColumnNumericTransformer() })
   lineTotal: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  deliveredQuantity: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  returnedQuantity: number;
+
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, transformer: new ColumnNumericTransformer() })
+  damagedQuantity: number;
 }

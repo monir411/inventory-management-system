@@ -22,10 +22,13 @@ import Link from 'next/link';
 const STATUS_CONFIG = {
   DRAFT: { label: 'Draft', color: 'bg-slate-100 text-slate-600', icon: Clock },
   CONFIRMED: { label: 'Confirmed', color: 'bg-indigo-100 text-indigo-700', icon: CheckCircle },
-  READY_FOR_DELIVERY: { label: 'Ready', color: 'bg-amber-100 text-amber-700', icon: Package },
+  ASSIGNED: { label: 'Assigned', color: 'bg-cyan-100 text-cyan-700', icon: Package },
+  OUT_FOR_DELIVERY: { label: 'Out for Delivery', color: 'bg-amber-100 text-amber-700', icon: Package },
+  PARTIALLY_DELIVERED: { label: 'Partial Delivered', color: 'bg-orange-100 text-orange-700', icon: RefreshCw },
   DELIVERED: { label: 'Delivered', color: 'bg-emerald-100 text-emerald-700', icon: ShoppingCart },
-  RETURNED: { label: 'Returned', color: 'bg-rose-100 text-rose-700', icon: RefreshCw },
+  RETURNED_PARTIAL: { label: 'Returned Partial', color: 'bg-rose-100 text-rose-700', icon: RefreshCw },
   CANCELLED: { label: 'Cancelled', color: 'bg-rose-100 text-rose-700', icon: XCircle },
+  SETTLED: { label: 'Settled', color: 'bg-violet-100 text-violet-700', icon: CheckCircle },
 };
 
 const PAGE_SIZE = 15;
@@ -440,15 +443,25 @@ export function AllOrdersPage() {
                         )}
                         {order.status === 'CONFIRMED' && (
                           <button
-                            onClick={() => handleStatusUpdate(order.id, 'READY_FOR_DELIVERY')}
+                            onClick={() => handleStatusUpdate(order.id, 'ASSIGNED')}
                             disabled={isActionLoading === order.id}
-                            className="rounded-xl bg-amber-50 p-2 text-amber-600 transition-all hover:bg-amber-100"
-                            title="Ready for Delivery"
+                            className="rounded-xl bg-cyan-50 p-2 text-cyan-600 transition-all hover:bg-cyan-100"
+                            title="Assign for Delivery"
                           >
                             <Package className="h-4 w-4" />
                           </button>
                         )}
-                        {order.status === 'READY_FOR_DELIVERY' && (
+                        {order.status === 'ASSIGNED' && (
+                          <button
+                            onClick={() => handleStatusUpdate(order.id, 'OUT_FOR_DELIVERY')}
+                            disabled={isActionLoading === order.id}
+                            className="rounded-xl bg-amber-50 p-2 text-amber-600 transition-all hover:bg-amber-100"
+                            title="Mark Out for Delivery"
+                          >
+                            <Package className="h-4 w-4" />
+                          </button>
+                        )}
+                        {order.status === 'OUT_FOR_DELIVERY' && (
                           <button
                             onClick={() => handleStatusUpdate(order.id, 'DELIVERED')}
                             disabled={isActionLoading === order.id}
@@ -628,10 +641,10 @@ export function AllOrdersPage() {
                         Confirm Order
                       </button>
                       <button 
-                        onClick={() => handleStatusUpdate(selectedOrder.id, 'READY_FOR_DELIVERY')}
+                        onClick={() => handleStatusUpdate(selectedOrder.id, 'ASSIGNED')}
                         className="rounded-xl bg-amber-500 px-4 py-2 text-[10px] font-black uppercase tracking-wider text-white hover:bg-amber-600 transition-colors"
                       >
-                        Ready for Delivery
+                        Assign for Delivery
                       </button>
                       <button 
                         onClick={() => handleStatusUpdate(selectedOrder.id, 'DELIVERED')}

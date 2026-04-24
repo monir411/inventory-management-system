@@ -5,9 +5,16 @@ import type {
   UpdateProductPayload,
 } from '@/types/api';
 
-export function getProducts(query?: { companyId?: number; search?: string; isActive?: boolean }) {
+export function getProducts(
+  query?:
+    | number
+    | { companyId?: number; search?: string; isActive?: boolean },
+) {
+  const normalizedQuery =
+    typeof query === 'number' ? { companyId: query } : query;
+
   return apiRequest<Product[]>('products', {
-    query: query as Record<string, any>,
+    query: normalizedQuery as Record<string, any>,
   });
 }
 

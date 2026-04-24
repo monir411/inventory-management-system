@@ -198,7 +198,7 @@ export function DashboardPage() {
         <p className="mb-3 text-xs font-bold uppercase tracking-widest text-slate-400">Inventory</p>
         <div className="grid gap-4 sm:grid-cols-3">
           <KpiCard label="Total Products"  value={formatNumber(stockInvestment.data?.totalProducts ?? 0)}     sub={`${stockInvestment.data?.inStockProducts ?? 0} in stock`}   icon={<Package     className="h-5 w-5" />} accent="slate" small />
-          <KpiCard label="Stock Quantity"  value={formatNumber(stockInvestment.data?.companies?.reduce((s,c) => s + c.totalQuantity, 0) ?? 0)} sub="Units on hand"            icon={<Layers      className="h-5 w-5" />} accent="slate" small />
+          <KpiCard label="Stock Quantity"  value={formatNumber(stockInvestment.data?.companies?.reduce((s: number, c: any) => s + c.totalQuantity, 0) ?? 0)} sub="Units on hand"            icon={<Layers      className="h-5 w-5" />} accent="slate" small />
           <KpiCard label="Stock Value"     value={formatCurrency(stockInvestment.data?.totalInvestment ?? 0)} sub="Capital at cost price"                                      icon={<DollarSign  className="h-5 w-5" />} accent="cyan" small />
         </div>
       </div>

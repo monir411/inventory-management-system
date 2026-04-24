@@ -261,7 +261,7 @@ export function PurchaseDetailsPage({ purchaseId }: { purchaseId: number }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {purchase.payments.map((payment) => (
+                      {purchase.payments.map((payment: any) => (
                         <tr key={payment.id}>
                           <td className="px-3 py-4 text-slate-700">
                             {formatDateTime(payment.paymentDate)}
@@ -296,7 +296,7 @@ export function PurchaseDetailsPage({ purchaseId }: { purchaseId: number }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {purchase.items?.map((item) => (
+                  {purchase.items?.map((item: any) => (
                     <tr key={item.id}>
                       <td className="px-3 py-4">
                         <div className="font-medium text-slate-900">

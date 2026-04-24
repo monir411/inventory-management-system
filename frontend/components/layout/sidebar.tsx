@@ -6,7 +6,10 @@ import { usePathname } from 'next/navigation';
 const navigation = [
   { href: '/orders/new', label: 'New Order' },
   { href: '/orders', label: 'Manage Order' },
-  { href: '/delivery-summaries', label: 'Delivery Summary' },
+  { href: '/delivery-ops', label: 'Delivery Ops' },
+  { href: '/delivery-ops/orders', label: 'Confirmed Orders' },
+  { href: '/delivery-ops/reports', label: 'Delivery Reports' },
+  { href: '/delivery-ops/personnel', label: 'Delivery Personnel' },
   { href: '/products', label: 'Products' },
   { href: '/stock', label: 'Stock' },
   { href: '/routes', label: 'Routes' },

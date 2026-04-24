@@ -12,7 +12,7 @@ export interface CreateStockMovementPayload {
 }
 
 export function createStockMovement(payload: CreateStockMovementPayload) {
-  return apiRequest('stock/movements', {
+  return apiRequest<any>('stock/movements', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -26,13 +26,66 @@ export function getStockHistory(params: {
   endDate?: string;
   search?: string;
 }) {
-  return apiRequest('stock/history', {
+  return apiRequest<any[]>('stock/history', {
     query: params as Record<string, any>,
   });
 }
 
-export function getStockSummary(companyId?: number) {
-  return apiRequest('stock/summary', {
-    query: companyId ? { companyId } : {},
+export function getStockSummary(companyId?: number, search?: string) {
+  return apiRequest<any>('stock/summary', {
+    query: {
+      companyId,
+      search,
+    },
+  });
+}
+
+export function getStockMovements(companyId: number, filters: Record<string, any> = {}) {
+  return getStockHistory({
+    companyId,
+    ...filters,
+  });
+}
+
+export async function getLowStockProducts(
+  companyId?: number,
+  threshold = 10,
+  search?: string,
+) {
+  const data: any = await getStockSummary(companyId, search);
+  const list = Array.isArray(data) ? data : data.currentStockList || [];
+  return list.filter(
+    (item: any) =>
+      Number(item.currentStock || 0) > 0 && Number(item.currentStock || 0) <= threshold,
+  );
+}
+
+export async function getZeroStockProducts(companyId?: number, search?: string) {
+  const data: any = await getStockSummary(companyId, search);
+  const list = Array.isArray(data) ? data : data.currentStockList || [];
+  return list.filter((item: any) => Number(item.currentStock || 0) <= 0);
+}
+
+export async function getStockInvestmentSummary(
+  companyId?: number,
+  search?: string,
+) {
+  return getStockSummary(companyId, search);
+}
+
+export function addDamage(payload: {
+  companyId: number;
+  productId: number;
+  quantity: number;
+  note?: string;
+  movementDate?: string;
+}) {
+  return createStockMovement({
+    companyId: payload.companyId,
+    productId: payload.productId,
+    quantity: -Math.abs(payload.quantity),
+    note: payload.note,
+    reference: payload.movementDate,
+    type: 'DAMAGE',
   });
 }

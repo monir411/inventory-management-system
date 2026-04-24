@@ -8,14 +8,14 @@ export class DeliverySummaryItem {
   @PrimaryGeneratedColumn()
   id: number;
 
-  @Column()
+  @Column({ nullable: true })
   summaryId: number;
 
   @ManyToOne(() => DeliverySummary, (summary) => summary.items, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'summaryId' })
   summary: DeliverySummary;
 
-  @Column()
+  @Column({ nullable: true })
   productId: number;
 
   @ManyToOne(() => Product)

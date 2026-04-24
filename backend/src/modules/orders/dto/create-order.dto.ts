@@ -39,6 +39,14 @@ export class CreateOrderDto {
   @IsOptional()
   shopId?: number;
 
+  @IsNumber()
+  @IsOptional()
+  deliveryPersonId?: number;
+
+  @IsString()
+  @IsOptional()
+  marketArea?: string;
+
   @IsEnum(DiscountType)
   @IsOptional()
   discountType?: DiscountType;
@@ -46,6 +54,10 @@ export class CreateOrderDto {
   @IsNumber()
   @IsOptional()
   discountValue?: number;
+
+  @IsNumber()
+  @IsOptional()
+  advancePaid?: number;
 
   @IsArray()
   @ValidateNested({ each: true })

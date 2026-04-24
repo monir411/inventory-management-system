@@ -108,7 +108,7 @@ export function CompanyPayableLedgerPage({
         setDetails(nextDetails);
         setPaymentForms(
           Object.fromEntries(
-            nextDetails.payablePurchases.map((purchase) => [
+            nextDetails.payablePurchases.map((purchase: any) => [
               purchase.id,
               createPaymentFormState(purchase.payableAmount),
             ]),
@@ -232,7 +232,7 @@ export function CompanyPayableLedgerPage({
         {!isLoading && !error && details ? (
           details.payablePurchases.length > 0 ? (
             <div className="space-y-4">
-              {details.payablePurchases.map((purchase) => {
+              {details.payablePurchases.map((purchase: any) => {
                 const form =
                   paymentForms[purchase.id] ??
                   createPaymentFormState(purchase.payableAmount);
@@ -406,7 +406,7 @@ export function CompanyPayableLedgerPage({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {details.paymentHistory.map((payment) => {
+                  {details.paymentHistory.map((payment: any) => {
                     const paymentStatus = getPaymentEntryStatus(payment);
 
                     return (
