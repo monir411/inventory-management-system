@@ -182,26 +182,6 @@ export class DashboardService {
     const todayMatchedOrders = allOrders.filter(o => isTodayBD(o.createdAt) && o.status !== OrderStatus.CANCELLED);
     
     return {
-      debug: {
-        serverNow: new Date().toISOString(),
-        bdTodayDate: getBDTodayString(),
-        bdStartUtc: todayStartUTC.toISOString(),
-        bdEndUtc: todayEndUTC.toISOString(),
-        latestOrders: allOrders.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 5).map(o => ({
-          id: o.id,
-          createdAt: o.createdAt.toISOString(),
-          orderDate: o.orderDate,
-          grandTotal: o.grandTotal,
-          status: o.status
-        })),
-        todayMatchedOrders: todayMatchedOrders.map(o => ({
-          id: o.id,
-          createdAt: o.createdAt.toISOString(),
-          status: o.status
-        })),
-        todayOrdersCount: todayOrders.count,
-        todayOrdersValue: todayOrders.amount
-      },
       salesOverview: { totalOrderValue, netSales, totalProfit, returnRate },
       dailyOperations: { todayOrders, todayDispatch, todaySettled: todaySettledValue, todayReturn, todayCancelled },
       deliveryAndPending: { pendingAmount, totalDeliveredSettled: netSales, totalCancelledOrders, deliveryPerformance },

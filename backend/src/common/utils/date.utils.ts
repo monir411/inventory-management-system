@@ -7,23 +7,21 @@
  * @param date Optional date object, defaults to now.
  */
 export function getBDDayRange(date: Date = new Date()) {
-  // Asia/Dhaka is UTC+6
-  const BD_OFFSET_MS = 6 * 60 * 60 * 1000;
+  // 1. Get the date string in YYYY-MM-DD format for Bangladesh
+  const bdDateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Dhaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+
+  // 2. Create the start and end of that day in Asia/Dhaka
+  // Note: We use the YYYY-MM-DD + time + " Asia/Dhaka" parsing if supported, 
+  // or calculate UTC manually by knowing BD is always UTC+6.
+  const [year, month, day] = bdDateStr.split('-').map(Number);
   
-  // 1. Get the current time in BD by adding 6 hours to the UTC timestamp
-  const nowBD = new Date(date.getTime() + BD_OFFSET_MS);
-  
-  // 2. Find the start of the day in BD (00:00:00)
-  // We use UTC methods on the offset date to get the BD day parts
-  const startOfTodayBD = new Date(Date.UTC(
-    nowBD.getUTCFullYear(),
-    nowBD.getUTCMonth(),
-    nowBD.getUTCDate(),
-    0, 0, 0, 0
-  ));
-  
-  // 3. Convert back to UTC to get the actual range for database queries
-  const startUtc = new Date(startOfTodayBD.getTime() - BD_OFFSET_MS);
+  // Start of day in BD (00:00:00) is UTC-6
+  const startUtc = new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (6 * 60 * 60 * 1000));
   const endUtc = new Date(startUtc.getTime() + 24 * 60 * 60 * 1000);
   
   return { startUtc, endUtc };
@@ -43,9 +41,12 @@ export function isTodayBD(date: Date | string | undefined): boolean {
  * Returns the current date in YYYY-MM-DD format for Asia/Dhaka.
  */
 export function getBDTodayString(): string {
-  const BD_OFFSET_MS = 6 * 60 * 60 * 1000;
-  const nowBD = new Date(new Date().getTime() + BD_OFFSET_MS);
-  return nowBD.toISOString().split('T')[0];
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Dhaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
 }
 
 /**
@@ -53,14 +54,15 @@ export function getBDTodayString(): string {
  */
 export function isTodayBDDate(date: Date | string | undefined): boolean {
   if (!date) return false;
+  
   const d = typeof date === 'string' ? new Date(date) : date;
   
-  // Extract YYYY-MM-DD from the local parts of the Date object 
-  // (TypeORM date columns are loaded as local midnight by default)
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  const dateStr = `${y}-${m}-${day}`;
+  const dateStr = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Dhaka',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(d);
   
   return dateStr === getBDTodayString();
 }
