@@ -13,7 +13,7 @@ import { PageCard } from '@/components/ui/page-card';
 import { Pagination } from '@/components/ui/pagination';
 import { StateMessage } from '@/components/ui/state-message';
 import { useToast } from '@/components/ui/toast-provider';
-import { formatCurrency, formatDate } from '@/lib/utils/format';
+import { formatCurrency, formatDate, getTodayBD, formatBDDate } from '@/lib/utils/format';
 import { 
   getOrders, getOrderStats, deleteOrder, updateOrderStatus, settleOrder 
 } from '@/lib/api/orders';
@@ -157,23 +157,21 @@ export function AllOrdersPage() {
   };
 
   const setQuickDate = (type: 'today' | 'yesterday' | 'week' | 'month') => {
-    const now = new Date();
-    let start = new Date();
-    let end = new Date();
+    const nowBD = getTodayBD();
+    let start = new Date(nowBD);
+    let end = new Date(nowBD);
 
-    if (type === 'today') {
-      // already set
-    } else if (type === 'yesterday') {
-      start.setDate(now.getDate() - 1);
-      end.setDate(now.getDate() - 1);
+    if (type === 'yesterday') {
+      start.setDate(start.getDate() - 1);
+      end.setDate(end.getDate() - 1);
     } else if (type === 'week') {
-      start.setDate(now.getDate() - 7);
+      start.setDate(start.getDate() - 7);
     } else if (type === 'month') {
-      start.setDate(now.getDate() - 30);
+      start.setMonth(start.getMonth() - 1);
     }
 
-    setStartDate(start.toISOString().split('T')[0]);
-    setEndDate(end.toISOString().split('T')[0]);
+    setStartDate(formatBDDate(start));
+    setEndDate(formatBDDate(end));
   };
 
   return (
@@ -199,19 +197,79 @@ export function AllOrdersPage() {
 
       {/* Stats Section */}
       <div className="grid gap-4 grid-cols-2 md:grid-cols-4 lg:grid-cols-7">
+        {/* Featured Financial Card (Spans 2 columns) */}
+        <div className="col-span-2 bg-slate-900 rounded-3xl p-6 border border-slate-800 shadow-xl flex flex-col justify-between transition-all hover:scale-[1.02] relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
+            <TrendingUp className="h-16 w-16 text-emerald-400" />
+          </div>
+          
+          {(() => {
+            const orderCut = Number(stats?.totalOrderCutValue || 0);
+            const sold = Number(stats?.totalActualSoldValue || 0);
+            const loss = Number(stats?.totalReturnLoss || 0);
+            const soldPercentage = orderCut > 0 ? Math.round((sold / orderCut) * 100) : 0;
+            const lossPercentage = orderCut > 0 ? Math.round((loss / orderCut) * 100) : 0;
+
+            return (
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Total Order Cut Value</p>
+                </div>
+                <h3 className="text-4xl font-black text-white tracking-tight">
+                  {isStatsLoading ? '...' : formatCurrency(orderCut)}
+                </h3>
+                
+                <div className="mt-8 space-y-5">
+                  {/* Progress Bar Section */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-[9px] font-black uppercase tracking-widest">
+                       <span className="text-emerald-400">Sold Efficiency: {soldPercentage}%</span>
+                       <span className="text-rose-400">Loss: {lossPercentage}%</span>
+                    </div>
+                    <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden flex">
+                      <div 
+                        className="h-full bg-emerald-500 transition-all duration-700 ease-out shadow-[0_0_10px_rgba(16,185,129,0.3)]" 
+                        style={{ width: `${soldPercentage}%` }} 
+                      />
+                      <div 
+                        className="h-full bg-rose-500 transition-all duration-700 ease-out" 
+                        style={{ width: `${lossPercentage}%` }} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6 pt-2">
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Actual Sold</p>
+                      <p className="text-xl font-black text-emerald-400">
+                        {isStatsLoading ? '...' : formatCurrency(sold)}
+                      </p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Return/Damage Loss</p>
+                      <p className="text-xl font-black text-rose-500">
+                        {isStatsLoading ? '...' : formatCurrency(Math.abs(loss))}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+
         {[
           { label: 'Total Orders', val: stats?.totalOrders, color: 'text-slate-600', bg: 'bg-slate-50', unit: 'Orders' },
           { label: 'Today Orders', val: stats?.todayOrders, color: 'text-indigo-600', bg: 'bg-indigo-50', unit: 'Orders' },
-          { label: 'Order Value', val: stats?.totalOrderValue, color: 'text-blue-600', bg: 'bg-blue-50', isMoney: true },
-          { label: 'Today Order Value', val: stats?.todayOrderValue, color: 'text-sky-600', bg: 'bg-sky-50', isMoney: true },
+          { label: 'Today Order Cut', val: stats?.todayOrderCutValue, color: 'text-sky-600', bg: 'bg-sky-50', isMoney: true },
           { label: 'Waiting Orders', val: stats?.waitingOrders, color: 'text-amber-600', bg: 'bg-amber-50', unit: 'Orders' },
           { label: 'Total Dispatch', val: stats?.totalDispatch, color: 'text-cyan-600', bg: 'bg-cyan-50', unit: 'Orders' },
-          { label: 'Today Dispatch', val: stats?.todayDispatch, color: 'text-teal-600', bg: 'bg-teal-50', unit: 'Orders' },
           
+          { label: 'Today Dispatch', val: stats?.todayDispatch, color: 'text-teal-600', bg: 'bg-teal-50', unit: 'Orders' },
           { label: 'Total Settlement', val: stats?.totalSettlement, color: 'text-violet-600', bg: 'bg-violet-50', unit: 'Orders' },
           { label: 'Today Settlement', val: stats?.todaySettlement, color: 'text-purple-600', bg: 'bg-purple-50', unit: 'Orders' },
-          { label: 'Final Delivery Amount', val: stats?.totalFinalAmount, color: 'text-emerald-600', bg: 'bg-emerald-50', isMoney: true },
-          { label: 'Today Final Amount', val: stats?.todayFinalAmount, color: 'text-green-600', bg: 'bg-green-50', isMoney: true },
+          { label: 'Today Sold Value', val: stats?.todayActualSoldValue, color: 'text-green-600', bg: 'bg-green-50', isMoney: true },
           { label: 'Due Collection', val: stats?.dueCollection, color: 'text-orange-600', bg: 'bg-orange-50', isMoney: true },
           { label: 'Cancelled Orders', val: stats?.totalCancelled, color: 'text-rose-600', bg: 'bg-rose-50', unit: 'Orders' },
           { label: 'Today Cancelled', val: stats?.todayCancelled, color: 'text-pink-600', bg: 'bg-pink-50', unit: 'Orders' },
@@ -223,7 +281,7 @@ export function AllOrdersPage() {
 
           const amount = safeNumber(kpi.val);
           const displayValue = kpi.isMoney 
-            ? `BDT ${amount.toLocaleString("en-BD", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+            ? `BDT ${amount.toLocaleString("en-BD", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
             : amount.toLocaleString("en-BD");
 
           return (
@@ -405,7 +463,7 @@ export function AllOrdersPage() {
                         #{order.id.toString().padStart(6, '0')}
                       </button>
                       <p className="mt-1 flex items-center gap-1.5 text-xs font-bold text-slate-400">
-                        <Calendar className="h-3 w-3" /> {formatDate(order.orderDate)}
+                        <Calendar className="h-3 w-3" /> {formatDate(order.createdAt)}
                       </p>
                     </td>
                     <td className="px-6 py-4">

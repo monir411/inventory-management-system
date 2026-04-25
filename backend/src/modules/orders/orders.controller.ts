@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Param, ParseIntPipe, Query, Patch, Delete } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, ParseIntPipe, Query, Patch, Delete, Header } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { SettleOrderDto } from './dto/settle-order.dto';
@@ -9,6 +9,7 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Get('stats')
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
   getStats() {
     return this.ordersService.getStats();
   }
@@ -19,6 +20,7 @@ export class OrdersController {
   }
 
   @Get()
+  @Header('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate')
   findAll(@Query() query: any) {
     return this.ordersService.findAll(query);
   }

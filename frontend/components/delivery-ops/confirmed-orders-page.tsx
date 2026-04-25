@@ -8,13 +8,13 @@ import { StateMessage } from '@/components/ui/state-message';
 import { useToast } from '@/components/ui/toast-provider';
 import { useCompanies, useRoutes } from '@/hooks/use-common-queries';
 import { getEligibleDispatchOrders } from '@/lib/api/delivery-ops';
-import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/format';
+import { formatCurrency, formatDate, formatNumber, getTodayBDDate } from '@/lib/utils/format';
 import type { Order } from '@/types/api';
 import { orderStatusConfig, StatusBadge } from './delivery-ops-ui';
 
 export function ConfirmedOrdersPage() {
   const { error: showErrorToast } = useToast();
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => getTodayBDDate());
   const [companyId, setCompanyId] = useState('');
   const [routeId, setRouteId] = useState('');
   const [search, setSearch] = useState('');

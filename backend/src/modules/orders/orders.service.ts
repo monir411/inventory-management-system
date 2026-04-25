@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { getBDDayRange, isTodayBD, isTodayBDDate } from '../../common/utils/date.utils';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Order, OrderItem } from './entities/order.entity';
@@ -18,6 +19,8 @@ export class OrdersService {
     private readonly orderItemsRepository: Repository<OrderItem>,
     private readonly dataSource: DataSource,
   ) {}
+
+  private readonly logger = new Logger(OrdersService.name);
 
   async create(dto: CreateOrderDto) {
     if (!dto.items || dto.items.length === 0) {
@@ -126,53 +129,54 @@ export class OrdersService {
 
   async getStats() {
     const allOrders = await this.ordersRepository.find();
+    const { startUtc: todayStartUTC, endUtc: todayEndUTC } = getBDDayRange();
+    this.logger.log(`[DEBUG STATS API] BD TODAY RANGE: ${todayStartUTC.toISOString()} to ${todayEndUTC.toISOString()}`);
+    this.logger.log(`[DEBUG STATS API] Total Orders Fetched: ${allOrders.length}`);
     
-    // Get start of today in local time for comparisons
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    const todayStr = today.toISOString().split('T')[0];
+    if (allOrders.length > 0) {
+      const sorted = [...allOrders].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      const latest = sorted[0];
+      this.logger.log(`[DEBUG STATS API] Latest Order in DB: ID=${latest.id}, createdAt=${latest.createdAt.toISOString()}`);
+    }
 
     const safeNum = (val: any) => {
       const n = Number(val);
       return isFinite(n) ? n : 0;
     };
-
-    const isToday = (date: Date | string | undefined) => {
-      if (!date) return false;
-      const d = new Date(date);
-      return d.toISOString().split('T')[0] === todayStr;
-    };
-
-    // Card 1: Total Orders
     const totalOrders = allOrders.length;
+
+    const todayOrdersList = allOrders.filter(o => isTodayBD(o.createdAt) && o.status !== OrderStatus.CANCELLED);
+    const todayOrders = todayOrdersList.length;
+    this.logger.log(`[DEBUG STATS API] Today Matched Count (createdAt): ${todayOrders}`);
+    const todayOrderCutValue = todayOrdersList.reduce((sum, o) => sum + safeNum(o.grandTotal), 0);
     
-    // Card 2: Today Orders
-    const todayOrders = allOrders.filter(o => isToday(o.orderDate)).length;
-    
-    // Card 3 & 4: Order Value
-    const totalOrderValue = allOrders.reduce((sum, o) => 
-      sum + (o.status === OrderStatus.SETTLED ? safeNum(o.actualSoldAmount) : safeNum(o.grandTotal)), 0);
-    const todayOrderValue = allOrders.filter(o => isToday(o.orderDate)).reduce((sum, o) => 
-      sum + (o.status === OrderStatus.SETTLED ? safeNum(o.actualSoldAmount) : safeNum(o.grandTotal)), 0);
+    // Card 3 & 4: Order Value (Original / Cut Value)
+    const nonCancelledOrders = allOrders.filter(o => o.status !== OrderStatus.CANCELLED);
+    const totalOrderCutValue = nonCancelledOrders.reduce((sum, o) => sum + safeNum(o.grandTotal), 0);
+
+    // Card 9 & 10: Actual Sold Value (Post-settlement)
+    const totalActualSoldValue = nonCancelledOrders.reduce((sum, o) => sum + safeNum(o.actualSoldAmount), 0);
+    const todayActualSoldValue = allOrders.filter(o => o.status === OrderStatus.SETTLED && isTodayBD(o.settledAt))
+      .reduce((sum, o) => sum + safeNum(o.actualSoldAmount), 0);
+
+    // New Metric: Return / Damage Loss
+    const totalReturnLoss = totalOrderCutValue - totalActualSoldValue;
+    const todayReturnLoss = todayOrderCutValue - todayActualSoldValue;
 
     // Card 5 & 6: Dispatch
     const dispatchStatuses = [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.SETTLED];
     const totalDispatch = allOrders.filter(o => dispatchStatuses.includes(o.status)).length;
-    const todayDispatch = allOrders.filter(o => isToday(o.dispatchedAt)).length;
+    const todayDispatch = allOrders.filter(o => isTodayBD(o.dispatchedAt)).length;
 
     // Card 7 & 8: Settlement
     const totalSettlement = allOrders.filter(o => o.status === OrderStatus.SETTLED).length;
-    const todaySettlement = allOrders.filter(o => isToday(o.settledAt)).length;
-
-    // Card 9 & 10: Final Delivery Amount
-    const totalFinalAmount = allOrders.filter(o => o.status === OrderStatus.SETTLED).reduce((sum, o) => 
-      sum + safeNum(o.actualSoldAmount), 0);
-    const todayFinalAmount = allOrders.filter(o => o.status === OrderStatus.SETTLED && isToday(o.settledAt)).reduce((sum, o) => 
-      sum + safeNum(o.actualSoldAmount), 0);
+    const todaySettlement = allOrders.filter(o => isTodayBD(o.settledAt)).length;
 
     // Card 11 & 12: Cancelled
     const totalCancelled = allOrders.filter(o => o.status === OrderStatus.CANCELLED).length;
-    const todayCancelled = allOrders.filter(o => o.status === OrderStatus.CANCELLED && isToday(o.orderDate)).length; // Using orderDate for cancelled today? or updatedAt? User usually means orderDate.
+    const todayCancelled = allOrders.filter(o => o.status === OrderStatus.CANCELLED && isTodayBD(o.updatedAt)).length;
+
+    this.logger.log(`Stats Matched: TodayOrders=${todayOrders}, TodayCut=${todayOrderCutValue}, TodaySold=${todayActualSoldValue}, TodaySettled=${todaySettlement}, TodayDispatch=${todayDispatch}, TodayCancelled=${todayCancelled}`);
 
     // Card 13: Waiting Orders (Confirmed or Assigned but not dispatched)
     const waitingOrders = allOrders.filter(o => [OrderStatus.CONFIRMED, OrderStatus.ASSIGNED].includes(o.status)).length;
@@ -184,14 +188,16 @@ export class OrdersService {
     return {
       totalOrders,
       todayOrders,
-      totalOrderValue,
-      todayOrderValue,
+      totalOrderCutValue,
+      todayOrderCutValue,
+      totalActualSoldValue,
+      todayActualSoldValue,
+      totalReturnLoss,
+      todayReturnLoss,
       totalDispatch,
       todayDispatch,
       totalSettlement,
       todaySettlement,
-      totalFinalAmount,
-      todayFinalAmount,
       totalCancelled,
       todayCancelled,
       waitingOrders,

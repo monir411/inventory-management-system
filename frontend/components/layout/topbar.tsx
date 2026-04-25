@@ -31,7 +31,7 @@ export function Topbar() {
           {getTitle()}
         </h2>
         <p className="text-sm font-medium text-slate-500">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+          {new Date().toLocaleDateString('en-US', { timeZone: 'Asia/Dhaka', weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
         </p>
       </div>
       

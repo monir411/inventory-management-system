@@ -12,16 +12,14 @@ import {
   getDeliveryPeople,
   getEligibleDispatchOrders,
 } from '@/lib/api/delivery-ops';
-import { formatCurrency, formatDate, formatNumber } from '@/lib/utils/format';
+import { formatCurrency, formatDate, formatNumber, getTodayBDDate } from '@/lib/utils/format';
 import type { DeliveryPerson, Order } from '@/types/api';
 
 export function DispatchBatchCreatePage() {
   const router = useRouter();
   const { error: showErrorToast, success: showSuccessToast } = useToast();
 
-  const [dispatchDate, setDispatchDate] = useState(
-    new Date().toISOString().split('T')[0],
-  );
+  const [dispatchDate, setDispatchDate] = useState(getTodayBDDate());
   const [companyId, setCompanyId] = useState('');
   const [routeId, setRouteId] = useState('');
   const [deliveryPersonId, setDeliveryPersonId] = useState('');

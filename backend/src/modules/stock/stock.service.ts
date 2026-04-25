@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { getBDDayRange } from '../../common/utils/date.utils';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { StockMovement } from './entities/stock-movement.entity';
@@ -23,6 +24,8 @@ export class StockService {
     @InjectRepository(DispatchBatch)
     private readonly batchRepository: Repository<DispatchBatch>,
   ) {}
+
+  private readonly logger = new Logger(StockService.name);
 
   async create(dto: CreateStockMovementDto, username: string = 'Admin', manager?: any) {
     const repo = manager ? manager.getRepository(StockMovement) : this.movementRepository;
@@ -112,8 +115,9 @@ export class StockService {
     // (In this system, recalculating is already the way it works, 
     // so we just ensure the map is accurate)
 
-    const today = new Date();
-    today.setHours(0,0,0,0);
+    const { startUtc: todayStartUTC, endUtc: todayEndUTC } = getBDDayRange();
+    
+    this.logger.debug(`Stock Summary Filter [BD Today]: Start=${todayStartUTC.toISOString()}, End=${todayEndUTC.toISOString()}`);
     
     // Helper for safe numeric conversion
     const safeNum = (val: any) => {
@@ -125,7 +129,7 @@ export class StockService {
     const todaySettledBatches = await this.batchRepository.find({
       where: {
         status: DispatchBatchStatus.SETTLED,
-        settledAt: Between(today, new Date()),
+        settledAt: Between(todayStartUTC, todayEndUTC),
         ...(companyId ? { companyId } : {})
       },
       relations: ['items']
@@ -140,6 +144,8 @@ export class StockService {
     }, 0);
 
     const todayDeliveryAmount = todaySettledBatches.reduce((total, batch) => total + safeNum(batch.finalSoldValue), 0);
+
+    this.logger.log(`Stock Summary Matched: SettledBatches=${todaySettledBatches.length}, SoldQty=${todaySoldQty}, ReturnQty=${todayReturnQty}, Amount=${todayDeliveryAmount}`);
 
     // Calculate All-Time Settled Metrics from Dispatch Batches
     const allSettledBatches = await this.batchRepository.find({

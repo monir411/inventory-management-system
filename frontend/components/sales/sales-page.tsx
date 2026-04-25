@@ -28,7 +28,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { StateMessage } from '@/components/ui/state-message';
 import { useToast, useToastNotification } from '@/components/ui/toast-provider';
 import { deleteSale } from '@/lib/api/sales';
-import { formatCurrency, formatDate } from '@/lib/utils/format';
+import { formatCurrency, formatDate, getTodayBD, formatBDDate } from '@/lib/utils/format';
 import type { Sale } from '@/types/api';
 
 const salesPageSize = 10;
@@ -101,7 +101,7 @@ export function SalesPage() {
   // Print Modal State
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printOptions, setPrintOptions] = useState({
-    date: formatDateInput(new Date()),
+    date: formatBDDate(getTodayBD()),
     scope: 'all' as 'all' | 'company',
     companyId: '' as string | number,
   });

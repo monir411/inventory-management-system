@@ -12,7 +12,7 @@ import { createOrder, getOrder, updateOrder } from '@/lib/api/orders';
 import { PageCard } from '@/components/ui/page-card';
 import { LoadingBlock } from '@/components/ui/loading-block';
 import { useToastNotification } from '@/components/ui/toast-provider';
-import { formatCurrency } from '@/lib/utils/format';
+import { formatCurrency, getTodayBD, formatBDDate } from '@/lib/utils/format';
 import type { Company, Route, Shop, Product, DeliveryPerson } from '@/types/api';
 
 interface OrderLine {
@@ -45,11 +45,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
   const [stockMap, setStockMap] = useState<Record<number, number>>({});
 
   // Form Header
-  const [orderDate, setOrderDate] = useState(() => {
-    const now = new Date();
-    const bdTime = new Date(now.getTime() + (6 * 60 * 60 * 1000)); // UTC+6
-    return bdTime.toISOString().split('T')[0];
-  });
+  const [orderDate, setOrderDate] = useState(() => formatBDDate(getTodayBD()));
   const [companyId, setCompanyId] = useState<number | ''>('');
   const [routeId, setRouteId] = useState<number | ''>('');
   const [shopId, setShopId] = useState<number | ''>('');
@@ -126,7 +122,7 @@ export function NewOrderPage({ orderId }: { orderId?: number }) {
         if (orderId) {
           const order = await getOrder(orderId);
           if (order) {
-            setOrderDate(new Date(order.orderDate).toISOString().split('T')[0]);
+            setOrderDate(formatBDDate(new Date(order.orderDate)));
             setCompanyId(order.companyId || '');
             setCompSearch(order.company?.name || '');
             setRouteId(order.routeId || '');

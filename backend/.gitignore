@@ -1,2 +1,4 @@
 cd.vercel
 node_modules
+.vercel
+.env*.local
