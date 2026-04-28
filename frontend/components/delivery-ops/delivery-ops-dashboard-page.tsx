@@ -93,6 +93,12 @@ export function DeliveryOpsDashboardPage() {
             Confirmed Orders
           </Link>
           <Link
+            href="/delivery-ops/fast-track"
+            className="rounded-2xl border border-cyan-200 bg-cyan-50 px-5 py-3 text-sm font-bold text-cyan-700 shadow-sm transition hover:bg-cyan-100"
+          >
+            Create Order & Dispatch
+          </Link>
+          <Link
             href="/delivery-ops/batches/new"
             className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white shadow-lg transition hover:bg-slate-800"
           >
