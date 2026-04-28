@@ -225,13 +225,15 @@ export function FastTrackDispatchPage() {
       // 2. Create orders for each company
       const createdOrderIds: number[] = [];
       for (const [companyId, groupLines] of Array.from(companyGroups.entries())) {
-        const orderPayload = {
+        const orderPayload: any = {
           orderDate,
           companyId,
           routeId: Number(routeId),
           shopId: shopId ? Number(shopId) : undefined,
           deliveryPersonId: Number(deliveryPersonId),
           marketArea: marketArea || undefined,
+          discountType: 'FIXED',
+          discountValue: 0,
           note: note.trim() || undefined,
           items: groupLines.map(l => ({
             productId: l.productId,

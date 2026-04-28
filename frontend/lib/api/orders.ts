@@ -23,7 +23,7 @@ export interface CreateOrderPayload {
 }
 
 export function createOrder(payload: CreateOrderPayload) {
-  return apiRequest('orders', {
+  return apiRequest<Order>('orders', {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -49,7 +49,7 @@ export function updateOrderStatus(id: number, status: string) {
 }
 
 export function updateOrder(id: number, payload: CreateOrderPayload) {
-  return apiRequest(`orders/${id}/update`, {
+  return apiRequest<Order>(`orders/${id}/update`, {
     method: 'PATCH',
     body: JSON.stringify(payload),
   });
